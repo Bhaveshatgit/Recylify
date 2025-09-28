@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "303175641009",
+    "project_id": "recyclify-2536c",
+    "storage_bucket": "recyclify-2536c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:303175641009:android:c2c1c957ddd58203e6ff90",
+        "android_client_info": {
+          "package_name": "com.tasha.recyclify"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDGs1jrd6q7OXOKPeTefD2Jg-zQFdoT04o"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
