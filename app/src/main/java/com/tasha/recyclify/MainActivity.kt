@@ -1,5 +1,6 @@
 package com.tasha.recyclify
 
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
@@ -15,11 +16,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.LocalShipping
 import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.*
@@ -32,8 +31,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import coil.compose.rememberAsyncImagePainter
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.tasha.recyclify.data.model.User
@@ -106,8 +105,18 @@ fun HomeScreen(uid: String?) {
 
     var user by remember { mutableStateOf<User?>(null) }
     var isLoading by remember { mutableStateOf(true) }
-
     var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    // ✅ Profile photo integration
+    var profileImageUrl by remember { mutableStateOf<String?>(null) }
+    val sharedPrefs = context.getSharedPreferences("profile_cache", Context.MODE_PRIVATE)
+
+    // Try loading cached profile photo first
+    LaunchedEffect(uid) {
+        if (uid != null) {
+            profileImageUrl = sharedPrefs.getString("profileImageUrl_$uid", null)
+        }
+    }
 
     // Fetch user details
     LaunchedEffect(uid) {
@@ -115,46 +124,15 @@ fun HomeScreen(uid: String?) {
             db.collection("users").document(uid).get()
                 .addOnSuccessListener { snapshot ->
                     if (snapshot.exists()) {
-                        // Log raw data for debugging
-                        Log.d("FirestoreDebug", "Raw data: ${snapshot.data}")
-
-                        // ✅ FIX: Read "buyer" field (not "isBuyer")
-                        val isBuyerFromBoolean = snapshot.getBoolean("buyer")
-                            ?: snapshot.getBoolean("isBuyer") // fallback
-                        val isBuyerFromString = snapshot.getString("buyer")
-                        val isBuyerFromLong = snapshot.getLong("buyer")
-
-                        Log.d("FirestoreDebug", "buyer as Boolean: $isBuyerFromBoolean")
-                        Log.d("FirestoreDebug", "buyer as String: $isBuyerFromString")
-                        Log.d("FirestoreDebug", "buyer as Long: $isBuyerFromLong")
-
-                        // Map to User object
                         val mappedUser = snapshot.toObject(User::class.java)
+                        user = mappedUser
 
-                        Log.d("FirestoreDebug", "Mapped user: $mappedUser")
-                        Log.d("FirestoreDebug", "Mapped isBuyer: ${mappedUser?.isBuyer}")
-
-                        // ✅ Use manual mapping if automatic mapping gives wrong isBuyer
-                        user = if (mappedUser != null && mappedUser.isBuyer == isBuyerFromBoolean) {
-                            // Mapping worked correctly
-                            mappedUser
-                        } else {
-                            // Manual mapping as fallback
-                            Log.w("FirestoreDebug", "Using manual mapping - auto-mapping failed for isBuyer")
-                            User(
-                                uid = snapshot.getString("uid") ?: "",
-                                email = snapshot.getString("email") ?: "",
-                                mobile = snapshot.getString("mobile") ?: "",
-                                isBuyer = isBuyerFromBoolean ?: false,  // ✅ Use the boolean we read directly
-                                orgName = snapshot.getString("orgName"),
-                                orgLocation = snapshot.getString("orgLocation"),
-                                orgContact = snapshot.getString("orgContact"),
-                                firstName = snapshot.getString("firstName"),
-                                lastName = snapshot.getString("lastName")
-                            )
+                        // ✅ Get profile image URL and cache it
+                        val url = snapshot.getString("profileImageUrl")
+                        if (url != null) {
+                            profileImageUrl = url
+                            sharedPrefs.edit().putString("profileImageUrl_$uid", url).apply()
                         }
-
-                        Log.d("FirestoreDebug", "Final user: $user")
                     } else {
                         Log.e("FirestoreError", "Document does not exist")
                     }
@@ -179,25 +157,37 @@ fun HomeScreen(uid: String?) {
         drawerState = drawerState,
         drawerContent = {
             ModalDrawerSheet {
-                // Profile header
+                // ✅ Drawer Header with Profile Image
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Image(
-                        painter = painterResource(id = R.drawable.ic_launcher_foreground),
-                        contentDescription = "Profile Picture",
-                        modifier = Modifier
-                            .size(100.dp)
-                            .clip(CircleShape)
-                    )
+                    if (profileImageUrl != null) {
+                        Image(
+                            painter = rememberAsyncImagePainter(profileImageUrl),
+                            contentDescription = "Profile Picture",
+                            modifier = Modifier
+                                .size(100.dp)
+                                .clip(CircleShape)
+                        )
+                    } else {
+                        Image(
+                            painter = painterResource(id = R.drawable.ic_launcher_foreground),
+                            contentDescription = "Default Profile Picture",
+                            modifier = Modifier
+                                .size(100.dp)
+                                .clip(CircleShape)
+                        )
+                    }
+
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = when {
                             user?.isBuyer == true -> user?.orgName ?: "Organization"
-                            user?.isBuyer == false -> "${user?.firstName ?: ""} ${user?.lastName ?: ""}".trim().ifEmpty { "User" }
+                            user?.isBuyer == false -> "${user?.firstName ?: ""} ${user?.lastName ?: ""}".trim()
+                                .ifEmpty { "User" }
                             else -> "Guest"
                         },
                         style = MaterialTheme.typography.titleMedium
@@ -292,7 +282,6 @@ fun HomeScreen(uid: String?) {
                         .padding(padding)
                         .padding(16.dp)
                 ) {
-                    // Dashboard modules
                     LazyVerticalGrid(
                         columns = GridCells.Fixed(2),
                         verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -300,25 +289,21 @@ fun HomeScreen(uid: String?) {
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         if (user?.isBuyer == true) {
-                            // Buyer Modules
                             item {
                                 ModuleCard(
                                     title = "Buy",
                                     icon = Icons.Default.ShoppingCart,
-                                    onClick = { /* TODO: navigate to buy */ }
+                                    onClick = { /* TODO */ }
                                 )
                             }
-
                             item {
                                 ModuleCard(
                                     title = "Pickup Requests",
                                     icon = Icons.Default.LocalShipping,
-                                    onClick = { /* TODO: navigate to pickup requests */ }
+                                    onClick = { /* TODO */ }
                                 )
                             }
-
                         } else {
-                            // Seller Modules
                             item {
                                 ModuleCard(
                                     title = "Sell",
@@ -328,7 +313,6 @@ fun HomeScreen(uid: String?) {
                                     }
                                 )
                             }
-
                             item {
                                 ModuleCard(
                                     title = "My Bookings",
@@ -338,20 +322,10 @@ fun HomeScreen(uid: String?) {
                                     }
                                 )
                             }
-
-                            item {
-                                ModuleCard(
-                                    title = "Donations",
-                                    icon = Icons.Default.Favorite,
-                                    onClick = { /* TODO: navigate to donations */ }
-                                )
-                            }
                         }
                     }
 
                     Spacer(modifier = Modifier.height(20.dp))
-
-                    // News Feed
                     Text("Recycling News", style = MaterialTheme.typography.titleLarge)
                     Spacer(modifier = Modifier.height(8.dp))
                     NewsFeed()
@@ -361,12 +335,9 @@ fun HomeScreen(uid: String?) {
     }
 }
 
+// ------------------ MODULE CARD ------------------
 @Composable
-fun ModuleCard(
-    title: String,
-    icon: ImageVector,
-    onClick: () -> Unit
-) {
+fun ModuleCard(title: String, icon: ImageVector, onClick: () -> Unit) {
     Card(
         onClick = onClick,
         shape = RoundedCornerShape(24.dp),
@@ -382,12 +353,7 @@ fun ModuleCard(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = title,
-                tint = Color(0xFF4CAF50),
-                modifier = Modifier.size(40.dp)
-            )
+            Icon(imageVector = icon, contentDescription = title, tint = Color(0xFF4CAF50), modifier = Modifier.size(40.dp))
             Spacer(modifier = Modifier.height(8.dp))
             Text(text = title)
         }
@@ -414,22 +380,15 @@ fun NewsFeed() {
         }
     }
 
-    LazyColumn(
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = Modifier.fillMaxSize()
-    ) {
-        items(articles) { news ->
-            NewsCard(title = news.title, desc = news.description)
-        }
+    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxSize()) {
+        items(articles) { news -> NewsCard(title = news.title, desc = news.description) }
     }
 }
 
 @Composable
 fun NewsCard(title: String?, desc: String?) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 4.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(4.dp)
     ) {
@@ -438,13 +397,5 @@ fun NewsCard(title: String?, desc: String?) {
             Spacer(modifier = Modifier.height(4.dp))
             desc?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
         }
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun HomePreview() {
-    RecyclifyTheme {
-        //HomeScreen(uid )
     }
 }

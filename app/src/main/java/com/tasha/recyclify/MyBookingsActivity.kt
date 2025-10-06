@@ -22,13 +22,13 @@ import com.tasha.recyclify.ui.theme.RecyclifyTheme
 // ------------------ DATA MODEL ------------------
 data class Booking(
     val id: String = "",
+    val companyName: String = "",
     val wasteType: String = "",
     val quantity: String = "",
-    val status: String = "Pending", // Pending, Done, Cancelled
-    val userId: String = "",
-    val companyName: String = "",
     val date: String = "",
-    val timeSlot: String = ""
+    val timeSlot: String = "",
+    val status: String = "Pending", // Pending, Done, Cancelled
+    val userId: String = ""
 )
 
 // ------------------ MAIN ACTIVITY ------------------
@@ -151,7 +151,6 @@ fun MyBookingsScreen(modifier: Modifier = Modifier) {
             ) {
                 Text("Clear All Bookings")
             }
-
         }
     }
 }
@@ -170,7 +169,9 @@ fun BookingCard(booking: Booking, db: FirebaseFirestore) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text("Company: ${booking.companyName}", style = MaterialTheme.typography.bodyLarge)
             Text("Waste Type: ${booking.wasteType}", style = MaterialTheme.typography.bodyLarge)
-            Text("Quantity: ${booking.quantity}", style = MaterialTheme.typography.bodyMedium)
+            if (booking.quantity.isNotBlank()) {
+                Text("Quantity: ${booking.quantity}", style = MaterialTheme.typography.bodyMedium)
+            }
             Text("Date: ${booking.date}", style = MaterialTheme.typography.bodyMedium)
             Text("Time Slot: ${booking.timeSlot}", style = MaterialTheme.typography.bodyMedium)
             Text("Status: ${booking.status}", style = MaterialTheme.typography.bodySmall)
@@ -187,6 +188,7 @@ fun BookingCard(booking: Booking, db: FirebaseFirestore) {
                             .update("status", "Done")
                             .addOnSuccessListener {
                                 currentUser?.uid?.let { uid ->
+                                    // Increment wallet coins
                                     db.collection("wallet")
                                         .document(uid)
                                         .update("coins", FieldValue.increment(1))
@@ -195,6 +197,7 @@ fun BookingCard(booking: Booking, db: FirebaseFirestore) {
                                                 .set(mapOf("coins" to 1))
                                         }
 
+                                    // Add transaction with wasteType reference
                                     val transaction = mapOf(
                                         "coins" to 1,
                                         "timestamp" to FieldValue.serverTimestamp(),
