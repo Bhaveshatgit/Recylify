@@ -51,14 +51,6 @@ fun StatisticsScreen(onWalletClick: () -> Unit) {
         topBar = {
             CenterAlignedTopAppBar(
                 title = { Text("Statistics") },
-                actions = {
-                    IconButton(onClick = { onWalletClick() }) {
-                        Icon(
-                            imageVector = Icons.Filled.AccountBalanceWallet,
-                            contentDescription = "Wallet"
-                        )
-                    }
-                }
             )
         }
     ) { padding ->

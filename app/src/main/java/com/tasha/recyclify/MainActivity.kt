@@ -2,25 +2,24 @@ package com.tasha.recyclify
 
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.List
-import androidx.compose.material.icons.filled.LocalShipping
-import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.Sell
-import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -32,6 +31,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import coil.compose.rememberAsyncImagePainter
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -81,7 +81,6 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val uidFromIntent = intent.getStringExtra("uid")
-        Log.d("UID received", "onCreate: $uidFromIntent")
         setContent {
             RecyclifyTheme {
                 HomeScreen(uidFromIntent)
@@ -107,48 +106,38 @@ fun HomeScreen(uid: String?) {
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    // ✅ Profile photo integration
-    var profileImageUrl by remember { mutableStateOf<String?>(null) }
+    // ✅ Cached profile image
     val sharedPrefs = context.getSharedPreferences("profile_cache", Context.MODE_PRIVATE)
+    val currentUid = auth.currentUser?.uid ?: uid
+    var cachedUri by remember { mutableStateOf<Uri?>(null) }
 
-    // Try loading cached profile photo first
-    LaunchedEffect(uid) {
-        if (uid != null) {
-            profileImageUrl = sharedPrefs.getString("profileImageUrl_$uid", null)
-        }
+    // Load cached image
+    LaunchedEffect(Unit) {
+        val uriString = sharedPrefs.getString("cached_profile_uri_$currentUid", null)
+        cachedUri = uriString?.toUri()
     }
 
-    // Fetch user details
+    // Launcher for ProfileActivity — updates cached image when returning
+    val profileLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) {
+        val updatedUri = sharedPrefs.getString("cached_profile_uri_$currentUid", null)
+        cachedUri = updatedUri?.toUri()
+    }
+
+    // Load user data
     LaunchedEffect(uid) {
         if (uid != null) {
             db.collection("users").document(uid).get()
                 .addOnSuccessListener { snapshot ->
-                    if (snapshot.exists()) {
-                        val mappedUser = snapshot.toObject(User::class.java)
-                        user = mappedUser
-
-                        // ✅ Get profile image URL and cache it
-                        val url = snapshot.getString("profileImageUrl")
-                        if (url != null) {
-                            profileImageUrl = url
-                            sharedPrefs.edit().putString("profileImageUrl_$uid", url).apply()
-                        }
-                    } else {
-                        Log.e("FirestoreError", "Document does not exist")
-                    }
+                    if (snapshot.exists()) user = snapshot.toObject(User::class.java)
                     isLoading = false
                 }
                 .addOnFailureListener { e ->
-                    Log.e("FirestoreError", "Failed to load user", e)
-                    errorMessage = when {
-                        e.message?.contains("PERMISSION_DENIED") == true ->
-                            "Permission denied. Please check Firestore security rules."
-                        else -> "Error: ${e.message}"
-                    }
+                    errorMessage = e.message
                     isLoading = false
                 }
         } else {
-            Log.e("FirestoreError", "UID is null")
             isLoading = false
         }
     }
@@ -157,29 +146,35 @@ fun HomeScreen(uid: String?) {
         drawerState = drawerState,
         drawerContent = {
             ModalDrawerSheet {
-                // ✅ Drawer Header with Profile Image
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    if (profileImageUrl != null) {
-                        Image(
-                            painter = rememberAsyncImagePainter(profileImageUrl),
-                            contentDescription = "Profile Picture",
-                            modifier = Modifier
-                                .size(100.dp)
-                                .clip(CircleShape)
-                        )
-                    } else {
-                        Image(
-                            painter = painterResource(id = R.drawable.ic_launcher_foreground),
-                            contentDescription = "Default Profile Picture",
-                            modifier = Modifier
-                                .size(100.dp)
-                                .clip(CircleShape)
-                        )
+                    Box(
+                        modifier = Modifier
+                            .size(100.dp)
+                            .clip(CircleShape)
+                            .clickable {
+                                val intent = Intent(context, ProfileActivity::class.java)
+                                profileLauncher.launch(intent)
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (cachedUri != null) {
+                            Image(
+                                painter = rememberAsyncImagePainter(cachedUri),
+                                contentDescription = "Profile Picture",
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            Image(
+                                painter = painterResource(id = R.drawable.ic_launcher_foreground),
+                                contentDescription = "Default Profile",
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
@@ -204,18 +199,22 @@ fun HomeScreen(uid: String?) {
                 NavigationDrawerItem(
                     label = { Text("Profile") },
                     selected = false,
-                    onClick = { context.startActivity(Intent(context, ProfileActivity::class.java)) }
-                )
-                NavigationDrawerItem(
-                    label = { Text("Settings") },
-                    selected = false,
-                    onClick = { /* TODO */ }
+                    onClick = {
+                        val intent = Intent(context, ProfileActivity::class.java)
+                        profileLauncher.launch(intent)
+                    }
                 )
                 NavigationDrawerItem(
                     label = { Text("Statistics") },
                     selected = false,
-                    onClick = { context.startActivity(Intent(context, StatisticsActivity::class.java)) }
+                    onClick = {
+                        val intent = Intent(context, StatisticsActivity::class.java)
+                        profileLauncher.launch(intent)
+                    }
                 )
+                NavigationDrawerItem(label = { Text("Wallet") }, selected = false, onClick = {val intent = Intent(context,
+                    WalletActivity::class.java)
+                    profileLauncher.launch(intent) })
                 NavigationDrawerItem(
                     label = { Text("Logout") },
                     selected = false,
@@ -230,9 +229,7 @@ fun HomeScreen(uid: String?) {
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = {
-                        Text(if (user?.isBuyer == true) "Buyer Dashboard" else "Seller Dashboard")
-                    },
+                    title = { Text(if (user?.isBuyer == true) "Buyer Dashboard" else "Seller Dashboard") },
                     navigationIcon = {
                         IconButton(onClick = { scope.launch { drawerState.open() } }) {
                             Icon(Icons.Default.Menu, contentDescription = "Menu")
@@ -244,21 +241,11 @@ fun HomeScreen(uid: String?) {
             containerColor = backgroundColor
         ) { padding ->
             if (isLoading) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding),
-                    contentAlignment = Alignment.Center
-                ) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator()
                 }
             } else if (user == null) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding),
-                    contentAlignment = Alignment.Center
-                ) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier.padding(16.dp)
@@ -290,37 +277,21 @@ fun HomeScreen(uid: String?) {
                     ) {
                         if (user?.isBuyer == true) {
                             item {
-                                ModuleCard(
-                                    title = "Buy",
-                                    icon = Icons.Default.ShoppingCart,
-                                    onClick = { /* TODO */ }
-                                )
+                                ModuleCard("Buy", Icons.Default.ShoppingCart) {}
                             }
                             item {
-                                ModuleCard(
-                                    title = "Pickup Requests",
-                                    icon = Icons.Default.LocalShipping,
-                                    onClick = { /* TODO */ }
-                                )
+                                ModuleCard("Pickup Requests", Icons.Default.LocalShipping) {}
                             }
                         } else {
                             item {
-                                ModuleCard(
-                                    title = "Sell",
-                                    icon = Icons.Default.Sell,
-                                    onClick = {
-                                        context.startActivity(Intent(context, SellActivity::class.java))
-                                    }
-                                )
+                                ModuleCard("Sell", Icons.Default.Sell) {
+                                    context.startActivity(Intent(context, SellActivity::class.java))
+                                }
                             }
                             item {
-                                ModuleCard(
-                                    title = "My Bookings",
-                                    icon = Icons.Default.List,
-                                    onClick = {
-                                        context.startActivity(Intent(context, MyBookingsActivity::class.java))
-                                    }
-                                )
+                                ModuleCard("My Bookings", Icons.Default.List) {
+                                    context.startActivity(Intent(context, MyBookingsActivity::class.java))
+                                }
                             }
                         }
                     }
@@ -355,7 +326,7 @@ fun ModuleCard(title: String, icon: ImageVector, onClick: () -> Unit) {
         ) {
             Icon(imageVector = icon, contentDescription = title, tint = Color(0xFF4CAF50), modifier = Modifier.size(40.dp))
             Spacer(modifier = Modifier.height(8.dp))
-            Text(text = title)
+            Text(title)
         }
     }
 }
@@ -364,31 +335,60 @@ fun ModuleCard(title: String, icon: ImageVector, onClick: () -> Unit) {
 @Composable
 fun NewsFeed() {
     var articles by remember { mutableStateOf(listOf<MediaStackArticle>()) }
+    var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
         scope.launch(Dispatchers.IO) {
             try {
                 val response = RetrofitClient.service.getNews(
-                    accessKey = "a96c76eb4b8fc1535851278dec7a54a0",
+                    accessKey = "f60590a7c97dee646420851fd4054001",
                     keywords = "waste"
                 )
-                articles = response.data
+                if (response.data.isNotEmpty()) {
+                    articles = response.data
+                } else {
+                    error = "No news available."
+                }
             } catch (e: Exception) {
-                e.printStackTrace()
+                Log.e("NewsFeed", "Error fetching news", e)
+                error = e.message
             }
         }
     }
 
-    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxSize()) {
-        items(articles) { news -> NewsCard(title = news.title, desc = news.description) }
+    when {
+        error != null -> Text(
+            text = "Error loading news: $error",
+            color = Color.Red,
+            modifier = Modifier.padding(8.dp)
+        )
+        articles.isEmpty() -> Box(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator()
+        }
+        else -> LazyColumn(
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxSize()
+        ) {
+            items(articles.size) { index ->
+                val news = articles[index]
+                NewsCard(title = news.title, desc = news.description)
+            }
+        }
     }
 }
 
+
+// ------------------ NEWS CARD ------------------
 @Composable
 fun NewsCard(title: String?, desc: String?) {
     Card(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(4.dp)
     ) {
