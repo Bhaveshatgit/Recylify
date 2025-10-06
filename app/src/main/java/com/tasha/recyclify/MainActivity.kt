@@ -16,8 +16,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.LocalShipping
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Sell
+import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -27,6 +31,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.google.firebase.auth.FirebaseAuth
@@ -101,44 +106,71 @@ fun HomeScreen(uid: String?) {
 
     var user by remember { mutableStateOf<User?>(null) }
     var isLoading by remember { mutableStateOf(true) }
-    var isBuyerFlag by remember { mutableStateOf<Boolean?>(null) } // explicit flag from Firestore
 
+    var errorMessage by remember { mutableStateOf<String?>(null) }
 
     // Fetch user details
     LaunchedEffect(uid) {
         if (uid != null) {
             db.collection("users").document(uid).get()
                 .addOnSuccessListener { snapshot ->
-                    // 1) Raw map & types for debugging
-                    val raw = snapshot.data ?: emptyMap<String, Any>()
-                    Log.d("FirestoreRawData", raw.toString())
+                    if (snapshot.exists()) {
+                        // Log raw data for debugging
+                        Log.d("FirestoreDebug", "Raw data: ${snapshot.data}")
 
-                    // 2) raw field value + its Java type
-                    val rawField = snapshot.get("isBuyer")
-                    Log.d("FirestoreRawField", "isBuyer raw: $rawField (${rawField?.let { it::class.java.name } ?: "null"})")
+                        // ✅ FIX: Read "buyer" field (not "isBuyer")
+                        val isBuyerFromBoolean = snapshot.getBoolean("buyer")
+                            ?: snapshot.getBoolean("isBuyer") // fallback
+                        val isBuyerFromString = snapshot.getString("buyer")
+                        val isBuyerFromLong = snapshot.getLong("buyer")
 
-                    // 3) Firestore helper to read boolean safely
-                    val boolVal: Boolean? = snapshot.getBoolean("isBuyer")
-                    Log.d("FirestoreGetBoolean", "getBoolean -> $boolVal")
+                        Log.d("FirestoreDebug", "buyer as Boolean: $isBuyerFromBoolean")
+                        Log.d("FirestoreDebug", "buyer as String: $isBuyerFromString")
+                        Log.d("FirestoreDebug", "buyer as Long: $isBuyerFromLong")
 
-                    // 4) Try mapping to User (still useful)
-                    val mapped = snapshot.toObject(User::class.java)
-                    Log.d("MappedUser", "mapped -> $mapped")
+                        // Map to User object
+                        val mappedUser = snapshot.toObject(User::class.java)
 
-                    // 5) Decide final flag
-                    // Prefer explicit boolean read; fallback to mapped value if needed; final fallback = false
-                    isBuyerFlag = boolVal ?: mapped?.isBuyer ?: false
+                        Log.d("FirestoreDebug", "Mapped user: $mappedUser")
+                        Log.d("FirestoreDebug", "Mapped isBuyer: ${mappedUser?.isBuyer}")
 
-                    // 6) Store mapped user as well (for other fields)
-                    user = mapped
+                        // ✅ Use manual mapping if automatic mapping gives wrong isBuyer
+                        user = if (mappedUser != null && mappedUser.isBuyer == isBuyerFromBoolean) {
+                            // Mapping worked correctly
+                            mappedUser
+                        } else {
+                            // Manual mapping as fallback
+                            Log.w("FirestoreDebug", "Using manual mapping - auto-mapping failed for isBuyer")
+                            User(
+                                uid = snapshot.getString("uid") ?: "",
+                                email = snapshot.getString("email") ?: "",
+                                mobile = snapshot.getString("mobile") ?: "",
+                                isBuyer = isBuyerFromBoolean ?: false,  // ✅ Use the boolean we read directly
+                                orgName = snapshot.getString("orgName"),
+                                orgLocation = snapshot.getString("orgLocation"),
+                                orgContact = snapshot.getString("orgContact"),
+                                firstName = snapshot.getString("firstName"),
+                                lastName = snapshot.getString("lastName")
+                            )
+                        }
 
+                        Log.d("FirestoreDebug", "Final user: $user")
+                    } else {
+                        Log.e("FirestoreError", "Document does not exist")
+                    }
                     isLoading = false
                 }
                 .addOnFailureListener { e ->
                     Log.e("FirestoreError", "Failed to load user", e)
+                    errorMessage = when {
+                        e.message?.contains("PERMISSION_DENIED") == true ->
+                            "Permission denied. Please check Firestore security rules."
+                        else -> "Error: ${e.message}"
+                    }
                     isLoading = false
                 }
         } else {
+            Log.e("FirestoreError", "UID is null")
             isLoading = false
         }
     }
@@ -164,11 +196,16 @@ fun HomeScreen(uid: String?) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = when {
-                            user?.isBuyer == true -> (user?.orgName ?: "").trim()
-                            user?.isBuyer == false -> "${user?.firstName ?: ""} ${user?.lastName ?: ""}".trim()
-                            else -> "User"
+                            user?.isBuyer == true -> user?.orgName ?: "Organization"
+                            user?.isBuyer == false -> "${user?.firstName ?: ""} ${user?.lastName ?: ""}".trim().ifEmpty { "User" }
+                            else -> "Guest"
                         },
                         style = MaterialTheme.typography.titleMedium
+                    )
+                    Text(
+                        text = if (user?.isBuyer == true) "Buyer" else "Seller",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.Gray
                     )
                 }
 
@@ -203,7 +240,9 @@ fun HomeScreen(uid: String?) {
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text("Dashboard") },
+                    title = {
+                        Text(if (user?.isBuyer == true) "Buyer Dashboard" else "Seller Dashboard")
+                    },
                     navigationIcon = {
                         IconButton(onClick = { scope.launch { drawerState.open() } }) {
                             Icon(Icons.Default.Menu, contentDescription = "Menu")
@@ -223,6 +262,29 @@ fun HomeScreen(uid: String?) {
                 ) {
                     CircularProgressIndicator()
                 }
+            } else if (user == null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(16.dp)
+                    ) {
+                        Text(
+                            text = errorMessage ?: "Failed to load user data",
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Button(onClick = {
+                            context.startActivity(Intent(context, LoginActivity::class.java))
+                        }) {
+                            Text("Return to Login")
+                        }
+                    }
+                }
             } else {
                 Column(
                     modifier = Modifier
@@ -238,47 +300,50 @@ fun HomeScreen(uid: String?) {
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         if (user?.isBuyer == true) {
+                            // Buyer Modules
                             item {
                                 ModuleCard(
-                                    title = "Sell",
-                                    icon = Icons.Default.Favorite,
-                                    onClick = {
-                                        context.startActivity(Intent(context, SellActivity::class.java))
-                                    }
+                                    title = "Buy",
+                                    icon = Icons.Default.ShoppingCart,
+                                    onClick = { /* TODO: navigate to buy */ }
                                 )
                             }
+
                             item {
                                 ModuleCard(
-                                    title = "My bookings",
-                                    icon = Icons.Default.Refresh,
-                                    onClick = {
-                                        context.startActivity(Intent(context, MyBookingsActivity::class.java))
-                                    }
-                                )
-                            }
-                            item {
-                                ModuleCard(
-                                    title = "Donations",
-                                    icon = Icons.Default.Favorite,
-                                    onClick = { /* TODO: navigate to donations */ }
+                                    title = "Pickup Requests",
+                                    icon = Icons.Default.LocalShipping,
+                                    onClick = { /* TODO: navigate to pickup requests */ }
                                 )
                             }
 
                         } else {
                             // Seller Modules
-                            // Buyer Modules
                             item {
                                 ModuleCard(
-                                    title = "Buy",
-                                    icon = Icons.Default.Refresh,
-                                    onClick = { /* TODO: navigate to pickup requests */ }
+                                    title = "Sell",
+                                    icon = Icons.Default.Sell,
+                                    onClick = {
+                                        context.startActivity(Intent(context, SellActivity::class.java))
+                                    }
                                 )
                             }
+
                             item {
                                 ModuleCard(
-                                    title = "Pickup Requests",
-                                    icon = Icons.Default.Refresh,
-                                    onClick = { /* TODO: navigate to pickup requests */ }
+                                    title = "My Bookings",
+                                    icon = Icons.Default.List,
+                                    onClick = {
+                                        context.startActivity(Intent(context, MyBookingsActivity::class.java))
+                                    }
+                                )
+                            }
+
+                            item {
+                                ModuleCard(
+                                    title = "Donations",
+                                    icon = Icons.Default.Favorite,
+                                    onClick = { /* TODO: navigate to donations */ }
                                 )
                             }
                         }

@@ -1,17 +1,17 @@
 package com.tasha.recyclify.data.model
 
 data class User(
-    val uid: String = "",
-    val email: String = "",
-    val mobile: String = "",
-    val password: String = "",
-    val isBuyer: Boolean = true, // true = buyer, false = seller
-    // Buyer fields
-    val orgName: String? = null,
-    val orgLocation: String? = null,
-    // Seller fields
-    val firstName: String? = null,
-    val lastName: String? = null
-)
-
+    var uid: String = "",          // Changed from 'val' to 'var'
+    var email: String = "",
+    var mobile: String = "",
+    var isBuyer: Boolean = false,  // Changed from 'val' to 'var'
+    var orgName: String? = null,
+    var orgLocation: String? = null,
+    var orgContact: String? = null,
+    var firstName: String? = null,
+    var lastName: String? = null
+) {
+    // No-arg constructor for Firestore
+    constructor() : this("", "", "", false, null, null, null, null, null)
+}
 

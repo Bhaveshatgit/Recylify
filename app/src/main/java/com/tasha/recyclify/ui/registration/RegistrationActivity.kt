@@ -203,12 +203,11 @@ fun RegistrationScreen() {
                                 "uid" to uid,
                                 "email" to email,
                                 "mobile" to mobile,
-                                "password" to password,
-                                "isBuyer" to (role == "Buyer"), // ✅ fix
-                                "orgName" to if (role == "Buyer") orgName else null,
-                                "orgLocation" to if (role == "Buyer") orgLocation else null,
-                                "firstName" to if (role == "Seller") firstName else null,
-                                "lastName" to if (role == "Seller") lastName else null
+                                "isBuyer" to (role == "Buyer"),  // ✅ This should be a Boolean
+                                "orgName" to if (role == "Buyer") orgName else "",
+                                "orgLocation" to if (role == "Buyer") orgLocation else "",
+                                "firstName" to if (role == "Seller") firstName else "",
+                                "lastName" to if (role == "Seller") lastName else ""
                             )
 
                             db.collection("users").document(uid).set(user)

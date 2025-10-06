@@ -35,10 +35,12 @@ class SplashScreen : ComponentActivity() {
                 val rememberMe = prefs.getBoolean("rememberMe", false)
 
                 if (auth.currentUser != null && rememberMe) {
-                    // ✅ Go to Dashboard
-                    startActivity(Intent(this, MainActivity::class.java))
+
+                    val intent = Intent(this, MainActivity::class.java).apply {
+                        putExtra("uid", auth.currentUser?.uid)
+                    }
+                    this.startActivity(intent)
                 } else {
-                    // 🔐 Go to Login
                     startActivity(Intent(this, LoginActivity::class.java))
                 }
                 finish()
