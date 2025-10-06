@@ -56,24 +56,71 @@ fun BookingScreen(
     val context = LocalContext.current
     val currentUser = auth.currentUser
 
+    // State variables
     var selectedDate by remember { mutableStateOf("2025-08-30") }
     var selectedTime by remember { mutableStateOf("10:00 AM - 12:00 PM") }
+    var selectedWasteType by remember { mutableStateOf("E-Waste") }
+
+    // Waste type options
+    val wasteTypes = listOf(
+        "E-Waste",
+        "Wet-Waste",
+        "Dry-Waste",
+        "PET-Waste",
+        "Plastic",
+        "Metal",
+        "Paper/Cardboard",
+        "Glass",
+        "Textiles",
+        "Other"
+    )
 
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(16.dp),
+            .padding(20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Top
     ) {
-        Text("Pickup booking for:", style = MaterialTheme.typography.titleMedium)
+        Text("Pickup booking for", style = MaterialTheme.typography.titleMedium)
         Spacer(modifier = Modifier.height(4.dp))
-        Text(companyName, style = MaterialTheme.typography.bodyLarge)
+        Text(companyName, style = MaterialTheme.typography.titleLarge)
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(28.dp))
+
+        // Waste type selection
+        Text("Select Waste Type:", style = MaterialTheme.typography.bodyLarge)
+        Spacer(modifier = Modifier.height(4.dp))
+        var wasteExpanded by remember { mutableStateOf(false) }
+        ExposedDropdownMenuBox(
+            expanded = wasteExpanded,
+            onExpandedChange = { wasteExpanded = !wasteExpanded }
+        ) {
+            TextField(
+                value = selectedWasteType,
+                onValueChange = {},
+                readOnly = true,
+                modifier = Modifier
+                    .menuAnchor()
+                    .fillMaxWidth()
+            )
+            ExposedDropdownMenu(expanded = wasteExpanded, onDismissRequest = { wasteExpanded = false }) {
+                wasteTypes.forEach { type ->
+                    DropdownMenuItem(
+                        text = { Text(type) },
+                        onClick = {
+                            selectedWasteType = type
+                            wasteExpanded = false
+                        }
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
 
         // Date selection
-        Text("Select Date:")
+        Text("Select Date:", style = MaterialTheme.typography.bodyLarge)
         Spacer(modifier = Modifier.height(4.dp))
         var dateExpanded by remember { mutableStateOf(false) }
         ExposedDropdownMenuBox(
@@ -84,7 +131,9 @@ fun BookingScreen(
                 value = selectedDate,
                 onValueChange = {},
                 readOnly = true,
-                modifier = Modifier.menuAnchor()
+                modifier = Modifier
+                    .menuAnchor()
+                    .fillMaxWidth()
             )
             ExposedDropdownMenu(expanded = dateExpanded, onDismissRequest = { dateExpanded = false }) {
                 listOf("2025-08-30", "2025-08-31", "2025-09-01").forEach { date ->
@@ -99,10 +148,10 @@ fun BookingScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
         // Time slot selection
-        Text("Select Time Slot:")
+        Text("Select Time Slot:", style = MaterialTheme.typography.bodyLarge)
         Spacer(modifier = Modifier.height(4.dp))
         var timeExpanded by remember { mutableStateOf(false) }
         ExposedDropdownMenuBox(
@@ -113,7 +162,9 @@ fun BookingScreen(
                 value = selectedTime,
                 onValueChange = {},
                 readOnly = true,
-                modifier = Modifier.menuAnchor()
+                modifier = Modifier
+                    .menuAnchor()
+                    .fillMaxWidth()
             )
             ExposedDropdownMenu(expanded = timeExpanded, onDismissRequest = { timeExpanded = false }) {
                 listOf("10:00 AM - 12:00 PM", "12:00 PM - 2:00 PM", "4:00 PM - 6:00 PM").forEach { slot ->
@@ -128,31 +179,36 @@ fun BookingScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(36.dp))
 
-        Button(onClick = {
-            if (currentUser == null) {
-                Toast.makeText(context, "Please login first!", Toast.LENGTH_SHORT).show()
-                return@Button
-            }
-
-            val booking = hashMapOf(
-                "companyName" to companyName,
-                "date" to selectedDate,
-                "timeSlot" to selectedTime,
-                "status" to "Pending",
-                "userId" to currentUser.uid
-            )
-
-            db.collection("bookings")
-                .add(booking)
-                .addOnSuccessListener {
-                    Toast.makeText(context, "Booking confirmed!", Toast.LENGTH_SHORT).show()
+        // Confirm button
+        Button(
+            onClick = {
+                if (currentUser == null) {
+                    Toast.makeText(context, "Please login first!", Toast.LENGTH_SHORT).show()
+                    return@Button
                 }
-                .addOnFailureListener {
-                    Toast.makeText(context, "Error: ${it.message}", Toast.LENGTH_LONG).show()
-                }
-        }) {
+
+                val booking = hashMapOf(
+                    "companyName" to companyName,
+                    "wasteType" to selectedWasteType,
+                    "date" to selectedDate,
+                    "timeSlot" to selectedTime,
+                    "status" to "Pending",
+                    "userId" to currentUser.uid
+                )
+
+                db.collection("bookings")
+                    .add(booking)
+                    .addOnSuccessListener {
+                        Toast.makeText(context, "Booking confirmed!", Toast.LENGTH_SHORT).show()
+                    }
+                    .addOnFailureListener {
+                        Toast.makeText(context, "Error: ${it.message}", Toast.LENGTH_LONG).show()
+                    }
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
             Text("Confirm Pickup")
         }
     }
