@@ -102,24 +102,62 @@ fun MyBookingsScreen(modifier: Modifier = Modifier) {
                             .whereEqualTo("userId", uid)
                             .get()
                             .addOnSuccessListener { snapshot ->
+                                if (snapshot.isEmpty) {
+                                    Toast.makeText(
+                                        context,
+                                        "No bookings found for this user",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                    return@addOnSuccessListener
+                                }
+
+                                // Debug: show how many docs we found
+                                Toast.makeText(
+                                    context,
+                                    "Found ${snapshot.size()} bookings, deleting...",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+
                                 val batch = db.batch()
                                 snapshot.documents.forEach { doc ->
                                     batch.delete(doc.reference)
                                 }
-                                batch.commit().addOnSuccessListener {
-                                    Toast.makeText(
-                                        context,
-                                        "All bookings cleared successfully",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                }
+
+                                batch.commit()
+                                    .addOnSuccessListener {
+                                        // Clear UI immediately
+                                        bookings = emptyList()
+
+                                        Toast.makeText(
+                                            context,
+                                            "All ${snapshot.size()} bookings cleared successfully",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                    .addOnFailureListener { e ->
+                                        Toast.makeText(
+                                            context,
+                                            "Error clearing bookings: ${e.message}",
+                                            Toast.LENGTH_LONG
+                                        ).show()
+                                    }
                             }
+                            .addOnFailureListener { e ->
+                                Toast.makeText(
+                                    context,
+                                    "Query failed: ${e.message}",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            }
+                    } ?: run {
+                        Toast.makeText(context, "User not logged in", Toast.LENGTH_SHORT).show()
                     }
                 },
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("Clear All Bookings")
             }
+
         }
     }
 }
@@ -153,24 +191,41 @@ fun BookingCard(booking: Booking, db: FirebaseFirestore) {
                             .update("status", "Done")
                             .addOnSuccessListener {
                                 currentUser?.uid?.let { uid ->
+
+                                    // 1) Increment total coins
                                     db.collection("wallet")
                                         .document(uid)
                                         .update("coins", FieldValue.increment(1))
+                                        .addOnFailureListener {
+                                            // Create wallet doc if not exists
+                                            db.collection("wallet").document(uid)
+                                                .set(mapOf("coins" to 1))
+                                        }
+
+                                    // 2) Add a transaction record with timestamp
+                                    val transaction = mapOf(
+                                        "coins" to 1,
+                                        "timestamp" to FieldValue.serverTimestamp(),
+                                        "bookingId" to booking.id,
+                                        "wasteType" to booking.wasteType
+                                    )
+
+                                    db.collection("wallet")
+                                        .document(uid)
+                                        .collection("transactions")
+                                        .add(transaction)
                                         .addOnSuccessListener {
                                             Toast.makeText(
                                                 context,
-                                                "Booking marked as Done. +1 Green Coin added!",
+                                                "Booking marked as Done. +1 Green Coin recorded!",
                                                 Toast.LENGTH_SHORT
                                             ).show()
                                         }
-                                        .addOnFailureListener {
-                                            // Create wallet if not exists
-                                            db.collection("wallet").document(uid)
-                                                .set(mapOf("coins" to 1))
+                                        .addOnFailureListener { e ->
                                             Toast.makeText(
                                                 context,
-                                                "Wallet created. +1 Green Coin added!",
-                                                Toast.LENGTH_SHORT
+                                                "Failed to log transaction: ${e.message}",
+                                                Toast.LENGTH_LONG
                                             ).show()
                                         }
                                 }
@@ -180,6 +235,7 @@ fun BookingCard(booking: Booking, db: FirebaseFirestore) {
                 ) {
                     Text("Done")
                 }
+
 
                 OutlinedButton(
                     onClick = {

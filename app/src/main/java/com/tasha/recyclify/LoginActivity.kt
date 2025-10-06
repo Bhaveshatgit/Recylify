@@ -85,14 +85,23 @@ fun LoginScreen(modifier: Modifier = Modifier) {
                     auth.signInWithEmailAndPassword(email, password)
                         .addOnCompleteListener { task ->
                             if (task.isSuccessful) {
-                                // ✅ Save RememberMe preference
                                 val prefs = context.getSharedPreferences("RecyclifyPrefs", Context.MODE_PRIVATE)
                                 prefs.edit().putBoolean("rememberMe", rememberMe).apply()
 
+                                val uid = auth.currentUser?.uid
                                 Toast.makeText(context, "Login successful!", Toast.LENGTH_SHORT).show()
-                                context.startActivity(Intent(context, MainActivity::class.java))
+
+                                // ✅ Pass UID to MainActivity
+                                val intent = Intent(context, MainActivity::class.java).apply {
+                                    putExtra("uid", uid)
+                                }
+                                context.startActivity(intent)
                             } else {
-                                Toast.makeText(context, "Error: ${task.exception?.message}", Toast.LENGTH_LONG).show()
+                                Toast.makeText(
+                                    context,
+                                    "Error: ${task.exception?.message}",
+                                    Toast.LENGTH_LONG
+                                ).show()
                             }
                         }
                 },
