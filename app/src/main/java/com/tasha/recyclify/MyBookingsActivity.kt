@@ -25,7 +25,10 @@ data class Booking(
     val wasteType: String = "",
     val quantity: String = "",
     val status: String = "Pending", // Pending, Done, Cancelled
-    val userId: String = ""
+    val userId: String = "",
+    val companyName: String = "",
+    val date: String = "",
+    val timeSlot: String = ""
 )
 
 // ------------------ MAIN ACTIVITY ------------------
@@ -111,13 +114,6 @@ fun MyBookingsScreen(modifier: Modifier = Modifier) {
                                     return@addOnSuccessListener
                                 }
 
-                                // Debug: show how many docs we found
-                                Toast.makeText(
-                                    context,
-                                    "Found ${snapshot.size()} bookings, deleting...",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-
                                 val batch = db.batch()
                                 snapshot.documents.forEach { doc ->
                                     batch.delete(doc.reference)
@@ -125,9 +121,7 @@ fun MyBookingsScreen(modifier: Modifier = Modifier) {
 
                                 batch.commit()
                                     .addOnSuccessListener {
-                                        // Clear UI immediately
                                         bookings = emptyList()
-
                                         Toast.makeText(
                                             context,
                                             "All ${snapshot.size()} bookings cleared successfully",
@@ -171,11 +165,14 @@ fun BookingCard(booking: Booking, db: FirebaseFirestore) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(4.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
+            Text("Company: ${booking.companyName}", style = MaterialTheme.typography.bodyLarge)
             Text("Waste Type: ${booking.wasteType}", style = MaterialTheme.typography.bodyLarge)
             Text("Quantity: ${booking.quantity}", style = MaterialTheme.typography.bodyMedium)
+            Text("Date: ${booking.date}", style = MaterialTheme.typography.bodyMedium)
+            Text("Time Slot: ${booking.timeSlot}", style = MaterialTheme.typography.bodyMedium)
             Text("Status: ${booking.status}", style = MaterialTheme.typography.bodySmall)
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -186,23 +183,18 @@ fun BookingCard(booking: Booking, db: FirebaseFirestore) {
             ) {
                 Button(
                     onClick = {
-                        // Mark booking as Done
                         db.collection("bookings").document(booking.id)
                             .update("status", "Done")
                             .addOnSuccessListener {
                                 currentUser?.uid?.let { uid ->
-
-                                    // 1) Increment total coins
                                     db.collection("wallet")
                                         .document(uid)
                                         .update("coins", FieldValue.increment(1))
                                         .addOnFailureListener {
-                                            // Create wallet doc if not exists
                                             db.collection("wallet").document(uid)
                                                 .set(mapOf("coins" to 1))
                                         }
 
-                                    // 2) Add a transaction record with timestamp
                                     val transaction = mapOf(
                                         "coins" to 1,
                                         "timestamp" to FieldValue.serverTimestamp(),
@@ -217,15 +209,8 @@ fun BookingCard(booking: Booking, db: FirebaseFirestore) {
                                         .addOnSuccessListener {
                                             Toast.makeText(
                                                 context,
-                                                "Booking marked as Done. +1 Green Coin recorded!",
+                                                "Booking marked as Done. +1 Green Coin!",
                                                 Toast.LENGTH_SHORT
-                                            ).show()
-                                        }
-                                        .addOnFailureListener { e ->
-                                            Toast.makeText(
-                                                context,
-                                                "Failed to log transaction: ${e.message}",
-                                                Toast.LENGTH_LONG
                                             ).show()
                                         }
                                 }
@@ -235,7 +220,6 @@ fun BookingCard(booking: Booking, db: FirebaseFirestore) {
                 ) {
                     Text("Done")
                 }
-
 
                 OutlinedButton(
                     onClick = {

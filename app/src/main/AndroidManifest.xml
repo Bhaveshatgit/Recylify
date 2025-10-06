@@ -44,6 +44,7 @@
         <activity android:name="MyBookingsActivity" />
         <activity android:name="StatisticsActivity" />
         <activity android:name="WalletActivity" />
+        <activity android:name="ProfileActivity" />
 
 
     </application>

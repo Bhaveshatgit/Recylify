@@ -214,7 +214,7 @@ fun HomeScreen(uid: String?) {
                 NavigationDrawerItem(
                     label = { Text("Profile") },
                     selected = false,
-                    onClick = { /* TODO */ }
+                    onClick = { context.startActivity(Intent(context, ProfileActivity::class.java)) }
                 )
                 NavigationDrawerItem(
                     label = { Text("Settings") },
