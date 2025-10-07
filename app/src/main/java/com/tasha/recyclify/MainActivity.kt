@@ -104,40 +104,71 @@ fun HomeScreen(uid: String?) {
 
     var user by remember { mutableStateOf<User?>(null) }
     var isLoading by remember { mutableStateOf(true) }
+
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    // ✅ Cached profile image
-    val sharedPrefs = context.getSharedPreferences("profile_cache", Context.MODE_PRIVATE)
-    val currentUid = auth.currentUser?.uid ?: uid
-    var cachedUri by remember { mutableStateOf<Uri?>(null) }
-
-    // Load cached image
-    LaunchedEffect(Unit) {
-        val uriString = sharedPrefs.getString("cached_profile_uri_$currentUid", null)
-        cachedUri = uriString?.toUri()
-    }
-
-    // Launcher for ProfileActivity — updates cached image when returning
-    val profileLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult()
-    ) {
-        val updatedUri = sharedPrefs.getString("cached_profile_uri_$currentUid", null)
-        cachedUri = updatedUri?.toUri()
-    }
-
-    // Load user data
+    // Fetch user details
     LaunchedEffect(uid) {
         if (uid != null) {
             db.collection("users").document(uid).get()
                 .addOnSuccessListener { snapshot ->
-                    if (snapshot.exists()) user = snapshot.toObject(User::class.java)
+                    if (snapshot.exists()) {
+                        // Log raw data for debugging
+                        Log.d("FirestoreDebug", "Raw data: ${snapshot.data}")
+
+                        // ✅ FIX: Read "buyer" field (not "isBuyer")
+                        val isBuyerFromBoolean = snapshot.getBoolean("buyer")
+                            ?: snapshot.getBoolean("isBuyer") // fallback
+                        val isBuyerFromString = snapshot.getString("buyer")
+                        val isBuyerFromLong = snapshot.getLong("buyer")
+
+                        Log.d("FirestoreDebug", "buyer as Boolean: $isBuyerFromBoolean")
+                        Log.d("FirestoreDebug", "buyer as String: $isBuyerFromString")
+                        Log.d("FirestoreDebug", "buyer as Long: $isBuyerFromLong")
+
+                        // Map to User object
+                        val mappedUser = snapshot.toObject(User::class.java)
+
+                        Log.d("FirestoreDebug", "Mapped user: $mappedUser")
+                        Log.d("FirestoreDebug", "Mapped isBuyer: ${mappedUser?.isBuyer}")
+
+                        // ✅ Use manual mapping if automatic mapping gives wrong isBuyer
+                        user = if (mappedUser != null && mappedUser.isBuyer == isBuyerFromBoolean) {
+                            // Mapping worked correctly
+                            mappedUser
+                        } else {
+                            // Manual mapping as fallback
+                            Log.w("FirestoreDebug", "Using manual mapping - auto-mapping failed for isBuyer")
+                            User(
+                                uid = snapshot.getString("uid") ?: "",
+                                email = snapshot.getString("email") ?: "",
+                                mobile = snapshot.getString("mobile") ?: "",
+                                isBuyer = isBuyerFromBoolean ?: false,  // ✅ Use the boolean we read directly
+                                orgName = snapshot.getString("orgName"),
+                                orgLocation = snapshot.getString("orgLocation"),
+                                orgContact = snapshot.getString("orgContact"),
+                                firstName = snapshot.getString("firstName"),
+                                lastName = snapshot.getString("lastName")
+                            )
+                        }
+
+                        Log.d("FirestoreDebug", "Final user: $user")
+                    } else {
+                        Log.e("FirestoreError", "Document does not exist")
+                    }
                     isLoading = false
                 }
                 .addOnFailureListener { e ->
-                    errorMessage = e.message
+                    Log.e("FirestoreError", "Failed to load user", e)
+                    errorMessage = when {
+                        e.message?.contains("PERMISSION_DENIED") == true ->
+                            "Permission denied. Please check Firestore security rules."
+                        else -> "Error: ${e.message}"
+                    }
                     isLoading = false
                 }
         } else {
+            Log.e("FirestoreError", "UID is null")
             isLoading = false
         }
     }
@@ -146,43 +177,25 @@ fun HomeScreen(uid: String?) {
         drawerState = drawerState,
         drawerContent = {
             ModalDrawerSheet {
+                // Profile header
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Box(
+                    Image(
+                        painter = painterResource(id = R.drawable.ic_launcher_foreground),
+                        contentDescription = "Profile Picture",
                         modifier = Modifier
                             .size(100.dp)
                             .clip(CircleShape)
-                            .clickable {
-                                val intent = Intent(context, ProfileActivity::class.java)
-                                profileLauncher.launch(intent)
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (cachedUri != null) {
-                            Image(
-                                painter = rememberAsyncImagePainter(cachedUri),
-                                contentDescription = "Profile Picture",
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        } else {
-                            Image(
-                                painter = painterResource(id = R.drawable.ic_launcher_foreground),
-                                contentDescription = "Default Profile",
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        }
-                    }
-
+                    )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = when {
                             user?.isBuyer == true -> user?.orgName ?: "Organization"
-                            user?.isBuyer == false -> "${user?.firstName ?: ""} ${user?.lastName ?: ""}".trim()
-                                .ifEmpty { "User" }
+                            user?.isBuyer == false -> "${user?.firstName ?: ""} ${user?.lastName ?: ""}".trim().ifEmpty { "User" }
                             else -> "Guest"
                         },
                         style = MaterialTheme.typography.titleMedium
@@ -199,22 +212,18 @@ fun HomeScreen(uid: String?) {
                 NavigationDrawerItem(
                     label = { Text("Profile") },
                     selected = false,
-                    onClick = {
-                        val intent = Intent(context, ProfileActivity::class.java)
-                        profileLauncher.launch(intent)
-                    }
+                    onClick = { /* TODO */ }
+                )
+                NavigationDrawerItem(
+                    label = { Text("Settings") },
+                    selected = false,
+                    onClick = { /* TODO */ }
                 )
                 NavigationDrawerItem(
                     label = { Text("Statistics") },
                     selected = false,
-                    onClick = {
-                        val intent = Intent(context, StatisticsActivity::class.java)
-                        profileLauncher.launch(intent)
-                    }
+                    onClick = { context.startActivity(Intent(context, StatisticsActivity::class.java)) }
                 )
-                NavigationDrawerItem(label = { Text("Wallet") }, selected = false, onClick = {val intent = Intent(context,
-                    WalletActivity::class.java)
-                    profileLauncher.launch(intent) })
                 NavigationDrawerItem(
                     label = { Text("Logout") },
                     selected = false,
@@ -229,7 +238,9 @@ fun HomeScreen(uid: String?) {
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text(if (user?.isBuyer == true) "Buyer Dashboard" else "Seller Dashboard") },
+                    title = {
+                        Text(if (user?.isBuyer == true) "Buyer Dashboard" else "Seller Dashboard")
+                    },
                     navigationIcon = {
                         IconButton(onClick = { scope.launch { drawerState.open() } }) {
                             Icon(Icons.Default.Menu, contentDescription = "Menu")
@@ -241,11 +252,21 @@ fun HomeScreen(uid: String?) {
             containerColor = backgroundColor
         ) { padding ->
             if (isLoading) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding),
+                    contentAlignment = Alignment.Center
+                ) {
                     CircularProgressIndicator()
                 }
             } else if (user == null) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding),
+                    contentAlignment = Alignment.Center
+                ) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier.padding(16.dp)
@@ -269,6 +290,7 @@ fun HomeScreen(uid: String?) {
                         .padding(padding)
                         .padding(16.dp)
                 ) {
+                    // Dashboard modules
                     LazyVerticalGrid(
                         columns = GridCells.Fixed(2),
                         verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -276,27 +298,55 @@ fun HomeScreen(uid: String?) {
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         if (user?.isBuyer == true) {
+                            // Buyer Modules
                             item {
-                                ModuleCard("Buy", Icons.Default.ShoppingCart) {}
+                                ModuleCard(
+                                    title = "Pickup Requests",
+                                    icon = Icons.Default.LocalShipping,
+                                    onClick = { /* TODO: navigate to pickup requests */ }
+                                )
                             }
                             item {
-                                ModuleCard("Pickup Requests", Icons.Default.LocalShipping) {}
+                                ModuleCard(
+                                    title = "Buy",
+                                    icon = Icons.Default.ShoppingCart,
+                                    onClick = { /* TODO: navigate to buy */ }
+                                )
+                            }
+                            item {
+                                ModuleCard(
+                                    title = "Donations",
+                                    icon = Icons.Default.Favorite,
+                                    onClick = { /* TODO: navigate to donations */ }
+                                )
                             }
                         } else {
+                            // Seller Modules
                             item {
-                                ModuleCard("Sell", Icons.Default.Sell) {
-                                    context.startActivity(Intent(context, SellActivity::class.java))
-                                }
+                                ModuleCard(
+                                    title = "Sell",
+                                    icon = Icons.Default.Sell,
+                                    onClick = {
+                                        context.startActivity(Intent(context, SellActivity::class.java))
+                                    }
+                                )
                             }
+
                             item {
-                                ModuleCard("My Bookings", Icons.Default.List) {
-                                    context.startActivity(Intent(context, MyBookingsActivity::class.java))
-                                }
+                                ModuleCard(
+                                    title = "My Bookings",
+                                    icon = Icons.Default.List,
+                                    onClick = {
+                                        context.startActivity(Intent(context, MyBookingsActivity::class.java))
+                                    }
+                                )
                             }
                         }
                     }
 
                     Spacer(modifier = Modifier.height(20.dp))
+
+                    // News Feed
                     Text("Recycling News", style = MaterialTheme.typography.titleLarge)
                     Spacer(modifier = Modifier.height(8.dp))
                     NewsFeed()
