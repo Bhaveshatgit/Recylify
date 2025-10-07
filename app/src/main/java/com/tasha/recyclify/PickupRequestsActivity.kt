@@ -100,7 +100,6 @@ fun PickupRequestsScreen(modifier: Modifier = Modifier) {
 
                     if (hasCompanies) {
                         // Fetch all bookings where buyerId matches
-                        // Remove orderBy to avoid index requirement
                         db.collection("bookings")
                             .whereEqualTo("buyerId", uid)
                             .addSnapshotListener { snapshot, error ->
@@ -157,65 +156,116 @@ fun PickupRequestsScreen(modifier: Modifier = Modifier) {
         }
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(16.dp)
-    ) {
-        // Stats Card
-        RequestStatsCard(requests)
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Filter Chips
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+    Column(modifier = modifier.fillMaxSize()) {
+        // Stats Card - Compact
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            elevation = CardDefaults.cardElevation(2.dp)
         ) {
-            FilterChips(
-                label = "All",
-                count = requests.size,
-                isSelected = selectedFilter == "All",
-                onClick = { selectedFilter = "All" }
-            )
-            FilterChips(
-                label = "Pending",
-                count = requests.count { it.status == "Pending" },
-                isSelected = selectedFilter == "Pending",
-                onClick = { selectedFilter = "Pending" }
-            )
-            FilterChips(
-                label = "Confirmed",
-                count = requests.count { it.status == "Confirmed" },
-                isSelected = selectedFilter == "Confirmed",
-                onClick = { selectedFilter = "Confirmed" }
-            )
-            FilterChips(
-                label = "Completed",
-                count = requests.count { it.status == "Completed" },
-                isSelected = selectedFilter == "Completed",
-                onClick = { selectedFilter = "Completed" }
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                CompactStatItem(
+                    icon = Icons.Default.Inbox,
+                    label = "Total",
+                    value = requests.size.toString(),
+                    color = Color(0xFF2196F3)
+                )
+                CompactStatItem(
+                    icon = Icons.Default.Schedule,
+                    label = "Pending",
+                    value = requests.count { it.status == "Pending" }.toString(),
+                    color = Color(0xFFFF9800)
+                )
+                CompactStatItem(
+                    icon = Icons.Default.CheckCircle,
+                    label = "Confirmed",
+                    value = requests.count { it.status == "Confirmed" }.toString(),
+                    color = Color(0xFF4CAF50)
+                )
+                CompactStatItem(
+                    icon = Icons.Default.Done,
+                    label = "Done",
+                    value = requests.count { it.status == "Completed" }.toString(),
+                    color = Color(0xFF9C27B0)
+                )
+            }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        // Filter Chips - Scrollable Row
+        androidx.compose.foundation.lazy.LazyRow(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            item {
+                FilterChips(
+                    label = "All",
+                    count = requests.size,
+                    isSelected = selectedFilter == "All",
+                    onClick = { selectedFilter = "All" }
+                )
+            }
+            item {
+                FilterChips(
+                    label = "Pending",
+                    count = requests.count { it.status == "Pending" },
+                    isSelected = selectedFilter == "Pending",
+                    onClick = { selectedFilter = "Pending" }
+                )
+            }
+            item {
+                FilterChips(
+                    label = "Confirmed",
+                    count = requests.count { it.status == "Confirmed" },
+                    isSelected = selectedFilter == "Confirmed",
+                    onClick = { selectedFilter = "Confirmed" }
+                )
+            }
+            item {
+                FilterChips(
+                    label = "Completed",
+                    count = requests.count { it.status == "Completed" },
+                    isSelected = selectedFilter == "Completed",
+                    onClick = { selectedFilter = "Completed" }
+                )
+            }
+            item {
+                FilterChips(
+                    label = "Cancelled",
+                    count = requests.count { it.status == "Cancelled" },
+                    isSelected = selectedFilter == "Cancelled",
+                    onClick = { selectedFilter = "Cancelled" }
+                )
+            }
+        }
 
         // Error Message
         errorMessage?.let { error ->
             Card(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = Color(0xFFFFF3E0)
                 )
             ) {
                 Row(
-                    modifier = Modifier.padding(12.dp),
+                    modifier = Modifier.padding(10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
                         Icons.Default.Warning,
                         contentDescription = null,
-                        tint = Color(0xFFFF9800)
+                        tint = Color(0xFFFF9800),
+                        modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
@@ -225,7 +275,6 @@ fun PickupRequestsScreen(modifier: Modifier = Modifier) {
                     )
                 }
             }
-            Spacer(modifier = Modifier.height(16.dp))
         }
 
         // Requests List
@@ -236,7 +285,7 @@ fun PickupRequestsScreen(modifier: Modifier = Modifier) {
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     CircularProgressIndicator(color = Color(0xFF4CAF50))
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
                     Text("Loading requests...", color = Color.Gray)
                 }
             }
@@ -258,14 +307,11 @@ fun PickupRequestsScreen(modifier: Modifier = Modifier) {
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                contentPadding = PaddingValues(12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 items(filteredRequests) { request ->
                     PickupRequestCard(request = request, db = db)
-                }
-
-                item {
-                    Spacer(modifier = Modifier.height(16.dp))
                 }
             }
         }
@@ -273,55 +319,14 @@ fun PickupRequestsScreen(modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun RequestStatsCard(requests: List<PickupRequest>) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(2.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            StatItems(
-                icon = Icons.Default.Inbox,
-                label = "Total",
-                value = requests.size.toString(),
-                color = Color(0xFF2196F3)
-            )
-            StatItems(
-                icon = Icons.Default.Schedule,
-                label = "Pending",
-                value = requests.count { it.status == "Pending" }.toString(),
-                color = Color(0xFFFF9800)
-            )
-            StatItems(
-                icon = Icons.Default.CheckCircle,
-                label = "Confirmed",
-                value = requests.count { it.status == "Confirmed" }.toString(),
-                color = Color(0xFF4CAF50)
-            )
-            StatItems(
-                icon = Icons.Default.Done,
-                label = "Completed",
-                value = requests.count { it.status == "Completed" }.toString(),
-                color = Color(0xFF9C27B0)
-            )
-        }
-    }
-}
-
-@Composable
-fun StatItems(icon: ImageVector, label: String, value: String, color: Color) {
+fun CompactStatItem(icon: ImageVector, label: String, value: String, color: Color) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
         Box(
             modifier = Modifier
-                .size(48.dp)
+                .size(40.dp)
                 .clip(CircleShape)
                 .background(color.copy(alpha = 0.1f)),
             contentAlignment = Alignment.Center
@@ -330,19 +335,19 @@ fun StatItems(icon: ImageVector, label: String, value: String, color: Color) {
                 imageVector = icon,
                 contentDescription = null,
                 tint = color,
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.size(20.dp)
             )
         }
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(6.dp))
         Text(
             text = value,
-            style = MaterialTheme.typography.titleLarge,
+            style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
             color = color
         )
         Text(
             text = label,
-            style = MaterialTheme.typography.bodySmall,
+            style = MaterialTheme.typography.labelSmall,
             color = Color.Gray
         )
     }
@@ -355,7 +360,7 @@ fun FilterChips(label: String, count: Int, isSelected: Boolean, onClick: () -> U
         onClick = onClick,
         label = { Text("$label ($count)") },
         leadingIcon = if (isSelected) {
-            { Icon(Icons.Default.Check, null, Modifier.size(18.dp)) }
+            { Icon(Icons.Default.Check, null, Modifier.size(16.dp)) }
         } else null,
         colors = FilterChipDefaults.filterChipColors(
             selectedContainerColor = Color(0xFF4CAF50),
@@ -363,6 +368,8 @@ fun FilterChips(label: String, count: Int, isSelected: Boolean, onClick: () -> U
         )
     )
 }
+
+
 
 @Composable
 fun EmptyStateView(icon: ImageVector, title: String, subtitle: String) {
@@ -372,21 +379,22 @@ fun EmptyStateView(icon: ImageVector, title: String, subtitle: String) {
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.padding(24.dp)
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                modifier = Modifier.size(80.dp),
+                modifier = Modifier.size(64.dp),
                 tint = Color.Gray.copy(alpha = 0.5f)
             )
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
                 color = Color.Gray
             )
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
             Text(
                 text = subtitle,
                 style = MaterialTheme.typography.bodyMedium,
@@ -405,7 +413,6 @@ fun PickupRequestCard(request: PickupRequest, db: FirebaseFirestore) {
     var showCompleteDialog by remember { mutableStateOf(false) }
     var isProcessing by remember { mutableStateOf(false) }
 
-    // Status configuration
     val statusConfigs = when (request.status) {
         "Pending" -> StatusConfig(
             color = Color(0xFFFF9800),
@@ -440,7 +447,7 @@ fun PickupRequestCard(request: PickupRequest, db: FirebaseFirestore) {
         elevation = CardDefaults.cardElevation(2.dp),
         shape = RoundedCornerShape(12.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(14.dp)) {
             // Header
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -460,12 +467,12 @@ fun PickupRequestCard(request: PickupRequest, db: FirebaseFirestore) {
                             imageVector = Icons.Default.Recycling,
                             contentDescription = null,
                             tint = Color.Gray,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(14.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = request.wasteType,
-                            style = MaterialTheme.typography.bodyMedium,
+                            style = MaterialTheme.typography.bodySmall,
                             color = Color.Gray
                         )
                     }
@@ -474,10 +481,10 @@ fun PickupRequestCard(request: PickupRequest, db: FirebaseFirestore) {
                 // Status Badge
                 Surface(
                     color = statusConfigs.color.copy(alpha = 0.15f),
-                    shape = RoundedCornerShape(20.dp)
+                    shape = RoundedCornerShape(16.dp)
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
@@ -485,11 +492,11 @@ fun PickupRequestCard(request: PickupRequest, db: FirebaseFirestore) {
                             imageVector = statusConfigs.icon,
                             contentDescription = null,
                             tint = statusConfigs.color,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(14.dp)
                         )
                         Text(
                             text = statusConfigs.text,
-                            style = MaterialTheme.typography.labelMedium,
+                            style = MaterialTheme.typography.labelSmall,
                             color = statusConfigs.color,
                             fontWeight = FontWeight.Bold
                         )
@@ -497,11 +504,11 @@ fun PickupRequestCard(request: PickupRequest, db: FirebaseFirestore) {
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
             Divider(color = Color.LightGray.copy(alpha = 0.3f))
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-            // Request Details
+            // Request Details - Compact
             RequestDetailRow(Icons.Default.CalendarToday, "Date", request.date)
             RequestDetailRow(Icons.Default.Schedule, "Time", request.timeSlot)
             RequestDetailRow(Icons.Default.LocationOn, "Location", request.location)
@@ -509,7 +516,7 @@ fun PickupRequestCard(request: PickupRequest, db: FirebaseFirestore) {
 
             // Action Buttons
             if (request.status != "Cancelled" && request.status != "Completed") {
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 when (request.status) {
                     "Pending" -> {
@@ -520,11 +527,12 @@ fun PickupRequestCard(request: PickupRequest, db: FirebaseFirestore) {
                                 enabled = !isProcessing,
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = Color(0xFF4CAF50)
-                                )
+                                ),
+                                contentPadding = PaddingValues(vertical = 10.dp)
                             ) {
-                                Icon(Icons.Default.CheckCircle, null, Modifier.size(18.dp))
+                                Icon(Icons.Default.CheckCircle, null, Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text("Confirm")
+                                Text("Confirm", style = MaterialTheme.typography.labelLarge)
                             }
 
                             OutlinedButton(
@@ -533,11 +541,12 @@ fun PickupRequestCard(request: PickupRequest, db: FirebaseFirestore) {
                                 enabled = !isProcessing,
                                 colors = ButtonDefaults.outlinedButtonColors(
                                     contentColor = Color(0xFFF44336)
-                                )
+                                ),
+                                contentPadding = PaddingValues(vertical = 10.dp)
                             ) {
-                                Icon(Icons.Default.Cancel, null, Modifier.size(18.dp))
+                                Icon(Icons.Default.Cancel, null, Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text("Reject")
+                                Text("Reject", style = MaterialTheme.typography.labelLarge)
                             }
                         }
                     }
@@ -549,11 +558,12 @@ fun PickupRequestCard(request: PickupRequest, db: FirebaseFirestore) {
                                 enabled = !isProcessing,
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = Color(0xFF9C27B0)
-                                )
+                                ),
+                                contentPadding = PaddingValues(vertical = 10.dp)
                             ) {
-                                Icon(Icons.Default.Done, null, Modifier.size(18.dp))
+                                Icon(Icons.Default.Done, null, Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text("Mark as Done")
+                                Text("Complete", style = MaterialTheme.typography.labelLarge)
                             }
 
                             OutlinedButton(
@@ -562,11 +572,12 @@ fun PickupRequestCard(request: PickupRequest, db: FirebaseFirestore) {
                                 enabled = !isProcessing,
                                 colors = ButtonDefaults.outlinedButtonColors(
                                     contentColor = Color(0xFFF44336)
-                                )
+                                ),
+                                contentPadding = PaddingValues(vertical = 10.dp)
                             ) {
-                                Icon(Icons.Default.Cancel, null, Modifier.size(18.dp))
+                                Icon(Icons.Default.Cancel, null, Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text("Cancel")
+                                Text("Cancel", style = MaterialTheme.typography.labelLarge)
                             }
                         }
                     }
@@ -580,7 +591,7 @@ fun PickupRequestCard(request: PickupRequest, db: FirebaseFirestore) {
         AlertDialog(
             onDismissRequest = { showConfirmDialog = false },
             icon = {
-                Icon(Icons.Default.CheckCircle, null, tint = Color(0xFF4CAF50), modifier = Modifier.size(32.dp))
+                Icon(Icons.Default.CheckCircle, null, tint = Color(0xFF4CAF50), modifier = Modifier.size(28.dp))
             },
             title = { Text("Confirm Pickup?") },
             text = { Text("Confirm this pickup request from the seller? They will be notified.") },
@@ -619,7 +630,7 @@ fun PickupRequestCard(request: PickupRequest, db: FirebaseFirestore) {
         AlertDialog(
             onDismissRequest = { showCancelDialog = false },
             icon = {
-                Icon(Icons.Default.Warning, null, tint = Color(0xFFF44336), modifier = Modifier.size(32.dp))
+                Icon(Icons.Default.Warning, null, tint = Color(0xFFF44336), modifier = Modifier.size(28.dp))
             },
             title = { Text("Cancel Pickup?") },
             text = { Text("Are you sure you want to cancel this pickup request?") },
@@ -658,21 +669,63 @@ fun PickupRequestCard(request: PickupRequest, db: FirebaseFirestore) {
         AlertDialog(
             onDismissRequest = { showCompleteDialog = false },
             icon = {
-                Icon(Icons.Default.Done, null, tint = Color(0xFF9C27B0), modifier = Modifier.size(32.dp))
+                Icon(Icons.Default.Done, null, tint = Color(0xFF9C27B0), modifier = Modifier.size(28.dp))
             },
             title = { Text("Mark as Completed?") },
-            text = { Text("Mark this pickup as completed? This action cannot be undone.") },
+            text = { Text("Mark this pickup as completed? Seller will receive 2 green coins as reward!") },
             confirmButton = {
                 Button(
                     onClick = {
                         isProcessing = true
                         showCompleteDialog = false
+
+                        // Update booking status
                         db.collection("bookings")
                             .document(request.id)
                             .update("status", "Completed")
                             .addOnSuccessListener {
-                                isProcessing = false
-                                Toast.makeText(context, "Pickup marked as completed!", Toast.LENGTH_SHORT).show()
+                                // Award 2 green coins to the seller
+                                val sellerId = request.userId
+                                val sellerWalletRef = db.collection("wallet").document(sellerId)
+
+                                db.runTransaction { transaction ->
+                                    val walletSnapshot = transaction.get(sellerWalletRef)
+                                    val currentCoins = walletSnapshot.getLong("coins") ?: 0L
+                                    val newCoins = currentCoins + 2
+
+                                    // Update coins
+                                    transaction.set(
+                                        sellerWalletRef,
+                                        mapOf("coins" to newCoins),
+                                        com.google.firebase.firestore.SetOptions.merge()
+                                    )
+
+                                    // Add transaction record
+                                    val transactionRef = sellerWalletRef
+                                        .collection("transactions")
+                                        .document()
+
+                                    transaction.set(transactionRef, mapOf(
+                                        "coins" to 2,
+                                        "type" to "earned",
+                                        "description" to "Pickup completed - ${request.companyName}",
+                                        "timestamp" to com.google.firebase.Timestamp.now()
+                                    ))
+                                }.addOnSuccessListener {
+                                    isProcessing = false
+                                    Toast.makeText(
+                                        context,
+                                        "✅ Completed! Seller earned 2 green coins",
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                }.addOnFailureListener { e ->
+                                    isProcessing = false
+                                    Toast.makeText(
+                                        context,
+                                        "Completed but coin award failed: ${e.message}",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
                             }
                             .addOnFailureListener { e ->
                                 isProcessing = false
@@ -698,25 +751,25 @@ fun RequestDetailRow(icon: ImageVector, label: String, value: String) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
+            .padding(vertical = 3.dp),
         verticalAlignment = Alignment.Top
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
             tint = Color(0xFF4CAF50),
-            modifier = Modifier.size(20.dp)
+            modifier = Modifier.size(18.dp)
         )
-        Spacer(modifier = Modifier.width(12.dp))
+        Spacer(modifier = Modifier.width(10.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = label,
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.labelSmall,
                 color = Color.Gray
             )
             Text(
                 text = value,
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodySmall,
                 color = Color.DarkGray,
                 fontWeight = FontWeight.Medium
             )

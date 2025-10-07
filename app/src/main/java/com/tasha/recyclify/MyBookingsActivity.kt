@@ -37,7 +37,7 @@ data class Booking(
     val mobileNumber: String = "",
     val date: String = "",
     val timeSlot: String = "",
-    val status: String = "Pending", // Pending, Confirmed, Completed, Cancelled
+    val status: String = "Pending",
     val userId: String = "",
     val timestamp: Long = 0L
 )
@@ -90,12 +90,11 @@ fun MyBookingsScreen(modifier: Modifier = Modifier) {
     var isLoading by remember { mutableStateOf(true) }
     var selectedFilter by remember { mutableStateOf("All") }
 
-    // Load bookings in real-time with ordering
+    // Load bookings - remove orderBy to avoid index requirement
     LaunchedEffect(Unit) {
         currentUser?.uid?.let { uid ->
             db.collection("bookings")
                 .whereEqualTo("userId", uid)
-                .orderBy("timestamp", Query.Direction.DESCENDING)
                 .addSnapshotListener { snapshot, error ->
                     if (error != null) {
                         error.printStackTrace()
@@ -104,7 +103,7 @@ fun MyBookingsScreen(modifier: Modifier = Modifier) {
                     }
                     val data = snapshot?.documents?.mapNotNull { doc ->
                         doc.toObject(Booking::class.java)?.copy(id = doc.id)
-                    } ?: emptyList()
+                    }?.sortedByDescending { it.timestamp } ?: emptyList()  // Sort in memory
                     bookings = data
                     isLoading = false
                 }
@@ -131,7 +130,7 @@ fun MyBookingsScreen(modifier: Modifier = Modifier) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Filter Chips
+        // Filter Chips - ALL STATUS OPTIONS
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -156,6 +155,27 @@ fun MyBookingsScreen(modifier: Modifier = Modifier) {
             )
         }
 
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Second row of filters
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            FilterChip(
+                label = "Completed",
+                count = bookings.count { it.status == "Completed" },
+                isSelected = selectedFilter == "Completed",
+                onClick = { selectedFilter = "Completed" }
+            )
+            FilterChip(
+                label = "Cancelled",
+                count = bookings.count { it.status == "Cancelled" },
+                isSelected = selectedFilter == "Cancelled",
+                onClick = { selectedFilter = "Cancelled" }
+            )
+        }
+
         Spacer(modifier = Modifier.height(16.dp))
 
         // Bookings List
@@ -164,7 +184,11 @@ fun MyBookingsScreen(modifier: Modifier = Modifier) {
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
-                CircularProgressIndicator(color = Color(0xFF4CAF50))
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator(color = Color(0xFF4CAF50))
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Loading bookings...", color = Color.Gray)
+                }
             }
         } else if (filteredBookings.isEmpty()) {
             EmptyBookingsView(selectedFilter)
@@ -225,6 +249,12 @@ fun BookingStatsCard(bookings: List<Booking>) {
                 label = "Confirmed",
                 value = bookings.count { it.status == "Confirmed" }.toString(),
                 color = Color(0xFF4CAF50)
+            )
+            StatItem(
+                icon = Icons.Default.Done,
+                label = "Completed",
+                value = bookings.count { it.status == "Completed" }.toString(),
+                color = Color(0xFF9C27B0)
             )
         }
     }
@@ -352,7 +382,7 @@ fun BookingCard(
             text = "Confirmed"
         )
         "Completed" -> StatusConfig1(
-            color = Color(0xFF2196F3),
+            color = Color(0xFF9C27B0),
             icon = Icons.Default.Done,
             text = "Completed"
         )
