@@ -1,19 +1,37 @@
 package com.tasha.recyclify
 
+import android.app.DatePickerDialog
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.tasha.recyclify.ui.theme.RecyclifyTheme
+import java.text.SimpleDateFormat
+import java.util.*
 
 class BookingActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3Api::class)
@@ -29,9 +47,14 @@ class BookingActivity : ComponentActivity() {
                 Scaffold(
                     topBar = {
                         TopAppBar(
-                            title = { Text("Book Pickup - $companyName") }
+                            title = { Text("Schedule Pickup") },
+                            colors = TopAppBarDefaults.topAppBarColors(
+                                containerColor = Color(0xFF4CAF50),
+                                titleContentColor = Color.White
+                            )
                         )
-                    }
+                    },
+                    containerColor = Color(0xFFF5F5F5)
                 ) { padding ->
                     BookingScreen(
                         companyName = companyName,
@@ -55,161 +78,366 @@ fun BookingScreen(
 ) {
     val context = LocalContext.current
     val currentUser = auth.currentUser
+    val scrollState = rememberScrollState()
 
     // State variables
-    var selectedDate by remember { mutableStateOf("2025-08-30") }
-    var selectedTime by remember { mutableStateOf("10:00 AM - 12:00 PM") }
+    var selectedDate by remember { mutableStateOf<Date?>(null) }
+    var selectedTimeSlot by remember { mutableStateOf<String?>(null) }
     var selectedWasteType by remember { mutableStateOf("E-Waste") }
+    var userLocation by remember { mutableStateOf("") }
+    var mobileNumber by remember { mutableStateOf("") }
+    var isSubmitting by remember { mutableStateOf(false) }
 
-    // Waste type options
+    // Generate time slots (9 AM to 6 PM)
+    val timeSlots = remember {
+        listOf(
+            "09:00 AM", "10:00 AM", "11:00 AM", "12:00 PM",
+            "01:00 PM", "02:00 PM", "03:00 PM", "04:00 PM",
+            "05:00 PM", "06:00 PM"
+        )
+    }
+
     val wasteTypes = listOf(
-        "E-Waste",
-        "Wet-Waste",
-        "Dry-Waste",
-        "PET-Waste",
-        "Plastic",
-        "Metal",
-        "Paper/Cardboard",
-        "Glass",
-        "Textiles",
-        "Other"
+        "E-Waste", "Wet-Waste", "Dry-Waste", "PET-Waste",
+        "Plastic", "Metal", "Paper/Cardboard", "Glass",
+        "Textiles", "Other"
     )
+
+    // Date formatter
+    val dateFormatter = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
 
     Column(
         modifier = modifier
             .fillMaxSize()
+            .verticalScroll(scrollState)
             .padding(20.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Top
+        horizontalAlignment = Alignment.Start,
+        verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
-        Text("Pickup booking for", style = MaterialTheme.typography.titleMedium)
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(companyName, style = MaterialTheme.typography.titleLarge)
-
-        Spacer(modifier = Modifier.height(28.dp))
-
-        // Waste type selection
-        Text("Select Waste Type:", style = MaterialTheme.typography.bodyLarge)
-        Spacer(modifier = Modifier.height(4.dp))
-        var wasteExpanded by remember { mutableStateOf(false) }
-        ExposedDropdownMenuBox(
-            expanded = wasteExpanded,
-            onExpandedChange = { wasteExpanded = !wasteExpanded }
+        // Company Info Card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            elevation = CardDefaults.cardElevation(2.dp)
         ) {
-            TextField(
-                value = selectedWasteType,
-                onValueChange = {},
-                readOnly = true,
-                modifier = Modifier
-                    .menuAnchor()
-                    .fillMaxWidth()
-            )
-            ExposedDropdownMenu(expanded = wasteExpanded, onDismissRequest = { wasteExpanded = false }) {
-                wasteTypes.forEach { type ->
-                    DropdownMenuItem(
-                        text = { Text(type) },
-                        onClick = {
-                            selectedWasteType = type
-                            wasteExpanded = false
-                        }
-                    )
-                }
+            Column(
+                modifier = Modifier.padding(20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Business,
+                    contentDescription = null,
+                    tint = Color(0xFF4CAF50),
+                    modifier = Modifier.size(48.dp)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Booking Pickup With",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.Gray
+                )
+                Text(
+                    text = companyName,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF2E7D32)
+                )
             }
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
-
-        // Date selection
-        Text("Select Date:", style = MaterialTheme.typography.bodyLarge)
-        Spacer(modifier = Modifier.height(4.dp))
-        var dateExpanded by remember { mutableStateOf(false) }
-        ExposedDropdownMenuBox(
-            expanded = dateExpanded,
-            onExpandedChange = { dateExpanded = !dateExpanded }
+        // Contact Information Section
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            elevation = CardDefaults.cardElevation(2.dp)
         ) {
-            TextField(
-                value = selectedDate,
-                onValueChange = {},
-                readOnly = true,
-                modifier = Modifier
-                    .menuAnchor()
-                    .fillMaxWidth()
-            )
-            ExposedDropdownMenu(expanded = dateExpanded, onDismissRequest = { dateExpanded = false }) {
-                listOf("2025-08-30", "2025-08-31", "2025-09-01").forEach { date ->
-                    DropdownMenuItem(
-                        text = { Text(date) },
-                        onClick = {
-                            selectedDate = date
-                            dateExpanded = false
-                        }
-                    )
-                }
-            }
-        }
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "Contact Information",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF2E7D32)
+                )
+                Spacer(modifier = Modifier.height(12.dp))
 
-        Spacer(modifier = Modifier.height(20.dp))
-
-        // Time slot selection
-        Text("Select Time Slot:", style = MaterialTheme.typography.bodyLarge)
-        Spacer(modifier = Modifier.height(4.dp))
-        var timeExpanded by remember { mutableStateOf(false) }
-        ExposedDropdownMenuBox(
-            expanded = timeExpanded,
-            onExpandedChange = { timeExpanded = !timeExpanded }
-        ) {
-            TextField(
-                value = selectedTime,
-                onValueChange = {},
-                readOnly = true,
-                modifier = Modifier
-                    .menuAnchor()
-                    .fillMaxWidth()
-            )
-            ExposedDropdownMenu(expanded = timeExpanded, onDismissRequest = { timeExpanded = false }) {
-                listOf("10:00 AM - 12:00 PM", "12:00 PM - 2:00 PM", "4:00 PM - 6:00 PM").forEach { slot ->
-                    DropdownMenuItem(
-                        text = { Text(slot) },
-                        onClick = {
-                            selectedTime = slot
-                            timeExpanded = false
-                        }
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(36.dp))
-
-        // Confirm button
-        Button(
-            onClick = {
-                if (currentUser == null) {
-                    Toast.makeText(context, "Please login first!", Toast.LENGTH_SHORT).show()
-                    return@Button
-                }
-
-                val booking = hashMapOf(
-                    "companyName" to companyName,
-                    "wasteType" to selectedWasteType,
-                    "date" to selectedDate,
-                    "timeSlot" to selectedTime,
-                    "status" to "Pending",
-                    "userId" to currentUser.uid
+                // Mobile Number
+                OutlinedTextField(
+                    value = mobileNumber,
+                    onValueChange = { if (it.length <= 10) mobileNumber = it },
+                    label = { Text("Mobile Number") },
+                    leadingIcon = {
+                        Icon(Icons.Default.Phone, contentDescription = null)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
                 )
 
-                db.collection("bookings")
-                    .add(booking)
-                    .addOnSuccessListener {
-                        Toast.makeText(context, "Booking confirmed!", Toast.LENGTH_SHORT).show()
-                    }
-                    .addOnFailureListener {
-                        Toast.makeText(context, "Error: ${it.message}", Toast.LENGTH_LONG).show()
-                    }
-            },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Confirm Pickup")
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Location
+                OutlinedTextField(
+                    value = userLocation,
+                    onValueChange = { userLocation = it },
+                    label = { Text("Pickup Location") },
+                    leadingIcon = {
+                        Icon(Icons.Default.LocationOn, contentDescription = null)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 2,
+                    maxLines = 3,
+                    placeholder = { Text("Enter your complete address") }
+                )
+            }
         }
+
+        // Waste Type Selection
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            elevation = CardDefaults.cardElevation(2.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = null,
+                        tint = Color(0xFF4CAF50)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Waste Type",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF2E7D32)
+                    )
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+
+                var wasteExpanded by remember { mutableStateOf(false) }
+                ExposedDropdownMenuBox(
+                    expanded = wasteExpanded,
+                    onExpandedChange = { wasteExpanded = !wasteExpanded }
+                ) {
+                    OutlinedTextField(
+                        value = selectedWasteType,
+                        onValueChange = {},
+                        readOnly = true,
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = wasteExpanded) },
+                        modifier = Modifier
+                            .menuAnchor()
+                            .fillMaxWidth()
+                    )
+                    ExposedDropdownMenu(
+                        expanded = wasteExpanded,
+                        onDismissRequest = { wasteExpanded = false }
+                    ) {
+                        wasteTypes.forEach { type ->
+                            DropdownMenuItem(
+                                text = { Text(type) },
+                                onClick = {
+                                    selectedWasteType = type
+                                    wasteExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Date Selection
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            elevation = CardDefaults.cardElevation(2.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.CalendarToday,
+                        contentDescription = null,
+                        tint = Color(0xFF4CAF50)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Select Date",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF2E7D32)
+                    )
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+
+                OutlinedButton(
+                    onClick = {
+                        val calendar = Calendar.getInstance()
+                        val today = calendar.clone() as Calendar
+
+                        DatePickerDialog(
+                            context,
+                            { _, year, month, day ->
+                                calendar.set(year, month, day)
+                                selectedDate = calendar.time
+                            },
+                            calendar.get(Calendar.YEAR),
+                            calendar.get(Calendar.MONTH),
+                            calendar.get(Calendar.DAY_OF_MONTH)
+                        ).apply {
+                            // Disable past dates
+                            datePicker.minDate = today.timeInMillis
+                            // Optional: Set max date to 30 days from now
+                            today.add(Calendar.DAY_OF_MONTH, 30)
+                            datePicker.maxDate = today.timeInMillis
+                        }.show()
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.DateRange, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = selectedDate?.let { dateFormatter.format(it) } ?: "Choose Date",
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+        }
+
+        // Time Slot Selection
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            elevation = CardDefaults.cardElevation(2.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Schedule,
+                        contentDescription = null,
+                        tint = Color(0xFF4CAF50)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Select Time Slot",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF2E7D32)
+                    )
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(3),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.height(200.dp)
+                ) {
+                    items(timeSlots) { slot ->
+                        TimeSlotChip(
+                            time = slot,
+                            isSelected = selectedTimeSlot == slot,
+                            onClick = { selectedTimeSlot = slot }
+                        )
+                    }
+                }
+            }
+        }
+
+        // Confirm Button
+        Button(
+            onClick = {
+                when {
+                    mobileNumber.length != 10 -> {
+                        Toast.makeText(context, "Please enter valid 10-digit mobile number", Toast.LENGTH_SHORT).show()
+                    }
+                    userLocation.isBlank() -> {
+                        Toast.makeText(context, "Please enter pickup location", Toast.LENGTH_SHORT).show()
+                    }
+                    selectedDate == null -> {
+                        Toast.makeText(context, "Please select a date", Toast.LENGTH_SHORT).show()
+                    }
+                    selectedTimeSlot == null -> {
+                        Toast.makeText(context, "Please select a time slot", Toast.LENGTH_SHORT).show()
+                    }
+                    currentUser == null -> {
+                        Toast.makeText(context, "Please login first!", Toast.LENGTH_SHORT).show()
+                    }
+                    else -> {
+                        isSubmitting = true
+                        val booking = hashMapOf(
+                            "companyName" to companyName,
+                            "wasteType" to selectedWasteType,
+                            "date" to dateFormatter.format(selectedDate!!),
+                            "timeSlot" to selectedTimeSlot!!,
+                            "location" to userLocation,
+                            "mobileNumber" to mobileNumber,
+                            "status" to "Pending",
+                            "userId" to currentUser.uid,
+                            "timestamp" to System.currentTimeMillis()
+                        )
+
+                        db.collection("bookings")
+                            .add(booking)
+                            .addOnSuccessListener {
+                                isSubmitting = false
+                                Toast.makeText(context, "Booking confirmed successfully!", Toast.LENGTH_LONG).show()
+                                (context as? ComponentActivity)?.finish()
+                            }
+                            .addOnFailureListener {
+                                isSubmitting = false
+                                Toast.makeText(context, "Error: ${it.message}", Toast.LENGTH_LONG).show()
+                            }
+                    }
+                }
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp),
+            enabled = !isSubmitting,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color(0xFF4CAF50)
+            )
+        ) {
+            if (isSubmitting) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(24.dp),
+                    color = Color.White
+                )
+            } else {
+                Icon(Icons.Default.CheckCircle, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Confirm Pickup Booking", style = MaterialTheme.typography.titleMedium)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+    }
+}
+
+@Composable
+fun TimeSlotChip(
+    time: String,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(if (isSelected) Color(0xFF4CAF50) else Color.White)
+            .border(
+                width = 1.dp,
+                color = if (isSelected) Color(0xFF4CAF50) else Color.LightGray,
+                shape = RoundedCornerShape(12.dp)
+            )
+            .clickable(onClick = onClick)
+            .padding(vertical = 12.dp, horizontal = 8.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = time,
+            style = MaterialTheme.typography.bodySmall,
+            color = if (isSelected) Color.White else Color.DarkGray,
+            textAlign = TextAlign.Center,
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+        )
     }
 }

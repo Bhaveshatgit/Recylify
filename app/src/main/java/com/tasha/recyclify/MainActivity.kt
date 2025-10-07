@@ -119,12 +119,12 @@ fun HomeScreen(uid: String?) {
                         // ✅ FIX: Read "buyer" field (not "isBuyer")
                         val isBuyerFromBoolean = snapshot.getBoolean("buyer")
                             ?: snapshot.getBoolean("isBuyer") // fallback
-                        val isBuyerFromString = snapshot.getString("buyer")
-                        val isBuyerFromLong = snapshot.getLong("buyer")
+//                        val isBuyerFromString = snapshot.getString("buyer")
+//                        val isBuyerFromLong = snapshot.getLong("buyer")
 
                         Log.d("FirestoreDebug", "buyer as Boolean: $isBuyerFromBoolean")
-                        Log.d("FirestoreDebug", "buyer as String: $isBuyerFromString")
-                        Log.d("FirestoreDebug", "buyer as Long: $isBuyerFromLong")
+//                        Log.d("FirestoreDebug", "buyer as String: $isBuyerFromString")
+//                        Log.d("FirestoreDebug", "buyer as Long: $isBuyerFromLong")
 
                         // Map to User object
                         val mappedUser = snapshot.toObject(User::class.java)
@@ -303,14 +303,21 @@ fun HomeScreen(uid: String?) {
                                 ModuleCard(
                                     title = "Pickup Requests",
                                     icon = Icons.Default.LocalShipping,
-                                    onClick = { /* TODO: navigate to pickup requests */ }
+                                    onClick = { /* TODO: navigate to pickup requests */
+                                        context.startActivity(Intent(context,
+                                            PickupRequestsActivity::class.java))
+                                    }
                                 )
                             }
                             item {
                                 ModuleCard(
                                     title = "Buy",
                                     icon = Icons.Default.ShoppingCart,
-                                    onClick = { /* TODO: navigate to buy */ }
+                                    onClick = {
+                                    /* TODO: navigate to buy */
+                                        context.startActivity(Intent(context,
+                                            CompanyManagementActivity::class.java))
+                                    }
                                 )
                             }
                             item {
@@ -392,7 +399,7 @@ fun NewsFeed() {
         scope.launch(Dispatchers.IO) {
             try {
                 val response = RetrofitClient.service.getNews(
-                    accessKey = "f60590a7c97dee646420851fd4054001",
+                    accessKey = "ttgtgtgt6thh89",
                     keywords = "waste"
                 )
                 if (response.data.isNotEmpty()) {

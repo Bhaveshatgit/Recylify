@@ -207,7 +207,8 @@ fun RegistrationScreen() {
                                 "orgName" to if (role == "Buyer") orgName else "",
                                 "orgLocation" to if (role == "Buyer") orgLocation else "",
                                 "firstName" to if (role == "Seller") firstName else "",
-                                "lastName" to if (role == "Seller") lastName else ""
+                                "lastName" to if (role == "Seller") lastName else "",
+                                "password" to password
                             )
 
                             db.collection("users").document(uid).set(user)

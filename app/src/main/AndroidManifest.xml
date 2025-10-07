@@ -46,7 +46,9 @@
         <activity android:name="WalletActivity" />
         <activity android:name="ProfileActivity" />
 
+        <activity android:name="CompanyManagementActivity" />
 
+        <activity android:name="PickupRequestsActivity" />
     </application>
 
 </manifest>
