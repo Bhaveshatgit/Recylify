@@ -675,42 +675,44 @@ fun PickupRequestCard(request: PickupRequest, db: FirebaseFirestore) {
             text = { Text("Mark this pickup as completed? Seller will receive 2 green coins as reward!") },
             confirmButton = {
                 Button(
+                    // Replace the Complete Dialog button's onClick in PickupRequestCard
+
                     onClick = {
                         isProcessing = true
                         showCompleteDialog = false
 
-                        // Update booking status
+                        val sellerId = request.userId
+
+                        // First update the booking status
                         db.collection("bookings")
                             .document(request.id)
                             .update("status", "Completed")
                             .addOnSuccessListener {
-                                // Award 2 green coins to the seller
-                                val sellerId = request.userId
+                                // Then award coins using a transaction
                                 val sellerWalletRef = db.collection("wallet").document(sellerId)
 
                                 db.runTransaction { transaction ->
+                                    // Read current wallet state
                                     val walletSnapshot = transaction.get(sellerWalletRef)
                                     val currentCoins = walletSnapshot.getLong("coins") ?: 0L
                                     val newCoins = currentCoins + 2
 
-                                    // Update coins
-                                    transaction.set(
-                                        sellerWalletRef,
-                                        mapOf("coins" to newCoins),
-                                        com.google.firebase.firestore.SetOptions.merge()
-                                    )
+                                    // Update ONLY the coins field
+                                    transaction.update(sellerWalletRef, "coins", newCoins)
 
-                                    // Add transaction record
+                                    // Create transaction record
                                     val transactionRef = sellerWalletRef
                                         .collection("transactions")
                                         .document()
 
-                                    transaction.set(transactionRef, mapOf(
-                                        "coins" to 2,
+                                    transaction.set(transactionRef, hashMapOf(
+                                        "coins" to 2L,
                                         "type" to "earned",
                                         "description" to "Pickup completed - ${request.companyName}",
                                         "timestamp" to com.google.firebase.Timestamp.now()
                                     ))
+
+                                    null // Return value
                                 }.addOnSuccessListener {
                                     isProcessing = false
                                     Toast.makeText(
@@ -722,14 +724,18 @@ fun PickupRequestCard(request: PickupRequest, db: FirebaseFirestore) {
                                     isProcessing = false
                                     Toast.makeText(
                                         context,
-                                        "Completed but coin award failed: ${e.message}",
-                                        Toast.LENGTH_SHORT
+                                        "Error awarding coins: ${e.message}",
+                                        Toast.LENGTH_LONG
                                     ).show()
                                 }
                             }
                             .addOnFailureListener { e ->
                                 isProcessing = false
-                                Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(
+                                    context,
+                                    "Error updating booking: ${e.message}",
+                                    Toast.LENGTH_SHORT
+                                ).show()
                             }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF9C27B0))
