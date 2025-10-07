@@ -101,7 +101,6 @@ fun MyCompaniesScreen(modifier: Modifier = Modifier) {
         currentUser?.uid?.let { uid ->
             db.collection("companies")
                 .whereEqualTo("buyerId", uid)
-                .orderBy("createdAt", Query.Direction.DESCENDING)
                 .addSnapshotListener { snapshot, error ->
                     if (error != null) {
                         error.printStackTrace()
@@ -110,7 +109,7 @@ fun MyCompaniesScreen(modifier: Modifier = Modifier) {
                     }
                     val data = snapshot?.documents?.mapNotNull { doc ->
                         doc.toObject(Company::class.java)?.copy(id = doc.id)
-                    } ?: emptyList()
+                    }?.sortedByDescending { it.createdAt } ?: emptyList()  // Sort in memory
                     companies = data
                     isLoading = false
                 }

@@ -47,7 +47,7 @@
         <activity android:name="ProfileActivity" />
 
         <activity android:name="CompanyManagementActivity" />
-
+        <activity android:name="CompanyListingActivity" />
         <activity android:name="PickupRequestsActivity" />
     </application>
 

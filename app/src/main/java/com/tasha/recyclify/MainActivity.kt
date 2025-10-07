@@ -320,13 +320,6 @@ fun HomeScreen(uid: String?) {
                                     }
                                 )
                             }
-                            item {
-                                ModuleCard(
-                                    title = "Donations",
-                                    icon = Icons.Default.Favorite,
-                                    onClick = { /* TODO: navigate to donations */ }
-                                )
-                            }
                         } else {
                             // Seller Modules
                             item {
@@ -334,7 +327,8 @@ fun HomeScreen(uid: String?) {
                                     title = "Sell",
                                     icon = Icons.Default.Sell,
                                     onClick = {
-                                        context.startActivity(Intent(context, SellActivity::class.java))
+                                        context.startActivity(Intent(context,
+                                            CompanyListingActivity::class.java))
                                     }
                                 )
                             }
