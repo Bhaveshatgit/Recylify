@@ -24,22 +24,21 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.Query
 import com.tasha.recyclify.ui.theme.RecyclifyTheme
 
 // ------------------ DATA MODEL ------------------
-// Reusing the Booking model but for buyer's perspective
 data class PickupRequest(
     val id: String = "",
     val companyName: String = "",
-    val companyId: String = "",  // Link to company
+    val companyId: String = "",
+    val buyerId: String = "",
     val wasteType: String = "",
     val location: String = "",
     val mobileNumber: String = "",
     val date: String = "",
     val timeSlot: String = "",
-    val status: String = "Pending", // Pending, Confirmed, Completed, Cancelled
-    val userId: String = "",  // Seller who booked
+    val status: String = "Pending",
+    val userId: String = "",
     val timestamp: Long = 0L
 )
 
@@ -83,46 +82,70 @@ fun PickupRequestsScreen(modifier: Modifier = Modifier) {
     val context = LocalContext.current
 
     var requests by remember { mutableStateOf(listOf<PickupRequest>()) }
-    var buyerCompanies by remember { mutableStateOf(listOf<String>()) }
     var isLoading by remember { mutableStateOf(true) }
     var selectedFilter by remember { mutableStateOf("All") }
+    var hasCompanies by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    // First, get all companies owned by this buyer
+    // Fetch all bookings directly by buyerId
     LaunchedEffect(Unit) {
         currentUser?.uid?.let { uid ->
+            // First check if buyer has any companies
             db.collection("companies")
                 .whereEqualTo("buyerId", uid)
+                .limit(1)
                 .get()
                 .addOnSuccessListener { companiesSnapshot ->
-                    // Get company names
-                    buyerCompanies = companiesSnapshot.documents.mapNotNull {
-                        it.getString("companyName")
-                    }
+                    hasCompanies = !companiesSnapshot.isEmpty
 
-                    // Now fetch all bookings for these companies
-                    if (buyerCompanies.isNotEmpty()) {
+                    if (hasCompanies) {
+                        // Fetch all bookings where buyerId matches
+                        // Remove orderBy to avoid index requirement
                         db.collection("bookings")
-                            .whereIn("companyName", buyerCompanies)
-                            .orderBy("timestamp", Query.Direction.DESCENDING)
+                            .whereEqualTo("buyerId", uid)
                             .addSnapshotListener { snapshot, error ->
                                 if (error != null) {
                                     error.printStackTrace()
                                     isLoading = false
+                                    errorMessage = error.message
+                                    Toast.makeText(
+                                        context,
+                                        "Error: ${error.message}",
+                                        Toast.LENGTH_LONG
+                                    ).show()
                                     return@addSnapshotListener
                                 }
+
                                 val data = snapshot?.documents?.mapNotNull { doc ->
-                                    doc.toObject(PickupRequest::class.java)?.copy(id = doc.id)
+                                    try {
+                                        doc.toObject(PickupRequest::class.java)?.copy(id = doc.id)
+                                    } catch (e: Exception) {
+                                        e.printStackTrace()
+                                        null
+                                    }
                                 } ?: emptyList()
-                                requests = data
+
+                                // Sort in memory by timestamp (newest first)
+                                requests = data.sortedByDescending { it.timestamp }
                                 isLoading = false
+                                errorMessage = null
                             }
                     } else {
                         isLoading = false
                     }
                 }
-                .addOnFailureListener {
+                .addOnFailureListener { e ->
                     isLoading = false
+                    errorMessage = e.message
+                    Toast.makeText(
+                        context,
+                        "Error checking companies: ${e.message}",
+                        Toast.LENGTH_SHORT
+                    ).show()
                 }
+        } ?: run {
+            isLoading = false
+            errorMessage = "User not logged in"
         }
     }
 
@@ -177,15 +200,47 @@ fun PickupRequestsScreen(modifier: Modifier = Modifier) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        // Error Message
+        errorMessage?.let { error ->
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color(0xFFFFF3E0)
+                )
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.Warning,
+                        contentDescription = null,
+                        tint = Color(0xFFFF9800)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Error: $error",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFFE65100)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
         // Requests List
         if (isLoading) {
             Box(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
-                CircularProgressIndicator(color = Color(0xFF4CAF50))
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator(color = Color(0xFF4CAF50))
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Loading requests...", color = Color.Gray)
+                }
             }
-        } else if (buyerCompanies.isEmpty()) {
+        } else if (!hasCompanies) {
             EmptyStateView(
                 icon = Icons.Default.Business,
                 title = "No Companies Yet",
@@ -195,7 +250,10 @@ fun PickupRequestsScreen(modifier: Modifier = Modifier) {
             EmptyStateView(
                 icon = Icons.Default.Inbox,
                 title = if (selectedFilter == "All") "No Requests Yet" else "No $selectedFilter Requests",
-                subtitle = "Pickup requests from sellers will appear here"
+                subtitle = if (selectedFilter == "All")
+                    "Pickup requests from sellers will appear here"
+                else
+                    "No requests with status: $selectedFilter"
             )
         } else {
             LazyColumn(
@@ -332,7 +390,8 @@ fun EmptyStateView(icon: ImageVector, title: String, subtitle: String) {
             Text(
                 text = subtitle,
                 style = MaterialTheme.typography.bodyMedium,
-                color = Color.Gray.copy(alpha = 0.7f)
+                color = Color.Gray.copy(alpha = 0.7f),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
         }
     }

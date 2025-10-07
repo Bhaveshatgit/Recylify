@@ -38,7 +38,11 @@ class BookingActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // Get data from intent - passed from company listing screen
         val companyName = intent.getStringExtra("companyName") ?: "Unknown Company"
+        val companyId = intent.getStringExtra("companyId") ?: ""
+        val buyerId = intent.getStringExtra("buyerId") ?: ""
+
         val auth = FirebaseAuth.getInstance()
         val firestore = FirebaseFirestore.getInstance()
 
@@ -51,13 +55,20 @@ class BookingActivity : ComponentActivity() {
                             colors = TopAppBarDefaults.topAppBarColors(
                                 containerColor = Color(0xFF4CAF50),
                                 titleContentColor = Color.White
-                            )
+                            ),
+                            navigationIcon = {
+                                IconButton(onClick = { finish() }) {
+                                    Icon(Icons.Default.ArrowBack, "Back", tint = Color.White)
+                                }
+                            }
                         )
                     },
                     containerColor = Color(0xFFF5F5F5)
                 ) { padding ->
                     BookingScreen(
                         companyName = companyName,
+                        companyId = companyId,
+                        buyerId = buyerId,
                         auth = auth,
                         db = firestore,
                         modifier = Modifier.padding(padding)
@@ -72,6 +83,8 @@ class BookingActivity : ComponentActivity() {
 @Composable
 fun BookingScreen(
     companyName: String,
+    companyId: String,
+    buyerId: String,
     auth: FirebaseAuth,
     db: FirebaseFirestore,
     modifier: Modifier = Modifier
@@ -283,9 +296,7 @@ fun BookingScreen(
                             calendar.get(Calendar.MONTH),
                             calendar.get(Calendar.DAY_OF_MONTH)
                         ).apply {
-                            // Disable past dates
                             datePicker.minDate = today.timeInMillis
-                            // Optional: Set max date to 30 days from now
                             today.add(Calendar.DAY_OF_MONTH, 30)
                             datePicker.maxDate = today.timeInMillis
                         }.show()
@@ -361,17 +372,23 @@ fun BookingScreen(
                     currentUser == null -> {
                         Toast.makeText(context, "Please login first!", Toast.LENGTH_SHORT).show()
                     }
+                    buyerId.isBlank() -> {
+                        Toast.makeText(context, "Invalid company data", Toast.LENGTH_SHORT).show()
+                    }
                     else -> {
                         isSubmitting = true
+                        // Create booking with buyerId for direct querying
                         val booking = hashMapOf(
                             "companyName" to companyName,
+                            "companyId" to companyId,
+                            "buyerId" to buyerId,  // CRITICAL: Link to buyer
                             "wasteType" to selectedWasteType,
                             "date" to dateFormatter.format(selectedDate!!),
                             "timeSlot" to selectedTimeSlot!!,
                             "location" to userLocation,
                             "mobileNumber" to mobileNumber,
                             "status" to "Pending",
-                            "userId" to currentUser.uid,
+                            "userId" to currentUser.uid,  // Seller who made the booking
                             "timestamp" to System.currentTimeMillis()
                         )
 

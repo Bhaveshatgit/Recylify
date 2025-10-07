@@ -382,8 +382,9 @@ fun CompanyListingCard(company: Company) {
             Button(
                 onClick = {
                     val intent = Intent(context, BookingActivity::class.java).apply {
-                        putExtra("companyName", company.companyName)
-                        putExtra("companyId", company.id)
+                        putExtra("companyName", company.companyName)  // From Company object
+                        putExtra("companyId", company.id)             // Document ID
+                        putExtra("buyerId", company.buyerId)          // Owner's UID
                     }
                     context.startActivity(intent)
                 },
