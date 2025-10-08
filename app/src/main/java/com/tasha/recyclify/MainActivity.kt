@@ -1,6 +1,7 @@
 package com.tasha.recyclify
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -91,6 +92,82 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+
+@Composable
+fun AboutDialog(onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                "About Recyclify",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            LazyColumn {
+                item {
+                    Text(
+                        "Developer",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF4CAF50)
+                    )
+                    Text(
+                        "Bhavesh\nTYBSC Computer Science",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
+                    )
+                }
+                item {
+                    Text(
+                        "Purpose",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF4CAF50)
+                    )
+                    Text(
+                        "Recyclify connects waste generators with recycling companies, promoting sustainable waste management and rewarding users with green coins for every pickup.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
+                    )
+                }
+                item {
+                    Text(
+                        "Open Source",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF4CAF50)
+                    )
+                    Text(
+                        "GitHub Repository",
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            color = Color(0xFF2196F3),
+                            textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline
+                        ),
+                        modifier = Modifier
+                            .padding(top = 4.dp)
+                            .clickable {
+                                // Replace with your GitHub URL
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/Bhaveshatgit/Recylify"))
+                            }
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onDismiss,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF4CAF50)
+                )
+            ) {
+                Text("Close")
+            }
+        }
+    )
+}
+
 // ------------------ UI ------------------
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -98,7 +175,7 @@ fun HomeScreen(uid: String?) {
     val context = LocalContext.current
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
-
+    var showAboutDialog by remember { mutableStateOf(false) }
     // Firebase
     val auth = FirebaseAuth.getInstance()
     val db = FirebaseFirestore.getInstance()
@@ -108,6 +185,9 @@ fun HomeScreen(uid: String?) {
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var greenCoins by remember { mutableStateOf(0) }
 
+    if (showAboutDialog) {
+        AboutDialog(onDismiss = { showAboutDialog = false })
+    }
     // Fetch user details
     LaunchedEffect(uid) {
         if (uid != null) {
@@ -249,6 +329,7 @@ fun HomeScreen(uid: String?) {
                     label = "Profile",
                     onClick = {
                         scope.launch { drawerState.close() }
+                        context.startActivity(Intent(context, ProfileActivity::class.java))
                         // TODO: Navigate to profile
                     }
                 )
@@ -275,20 +356,12 @@ fun HomeScreen(uid: String?) {
                 }
 
                 DrawerNavigationItem(
-                    icon = Icons.Outlined.Settings,
-                    label = "Settings",
-                    onClick = {
-                        scope.launch { drawerState.close() }
-                        // TODO: Navigate to settings
-                    }
-                )
-
-                DrawerNavigationItem(
-                    icon = Icons.Outlined.Help,
-                    label = "Help & Support",
+                    icon = Icons.Outlined.Info,
+                    label = "About",
                     onClick = {
                         scope.launch { drawerState.close() }
                         // TODO: Navigate to help
+                        showAboutDialog = true
                     }
                 )
 
@@ -722,7 +795,7 @@ fun NewsFeed() {
         scope.launch(Dispatchers.IO) {
             try {
                 val response = RetrofitClient.service.getNews(
-                    accessKey = "f60590a7c97dee646420851fd4054001",
+                    accessKey = "7877666",
                     keywords = "waste"
                 )
                 if (response.data.isNotEmpty()) {
