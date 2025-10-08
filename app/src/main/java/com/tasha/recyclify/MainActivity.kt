@@ -722,7 +722,7 @@ fun NewsFeed() {
         scope.launch(Dispatchers.IO) {
             try {
                 val response = RetrofitClient.service.getNews(
-                    accessKey = "ttgtgtgt6thh89",
+                    accessKey = "f60590a7c97dee646420851fd4054001",
                     keywords = "waste"
                 )
                 if (response.data.isNotEmpty()) {
