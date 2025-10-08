@@ -1,6 +1,7 @@
 package com.tasha.recyclify
 
 import android.os.Bundle
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -682,54 +683,122 @@ fun PickupRequestCard(request: PickupRequest, db: FirebaseFirestore) {
                         showCompleteDialog = false
 
                         val sellerId = request.userId
+                        val sellerWalletRef = db.collection("wallet").document(sellerId)
 
-                        // First update the booking status
+                        // Step 1: Update booking status first
                         db.collection("bookings")
                             .document(request.id)
                             .update("status", "Completed")
                             .addOnSuccessListener {
-                                // Then award coins using a transaction
-                                val sellerWalletRef = db.collection("wallet").document(sellerId)
+                                Log.d("PickupComplete", "Booking status updated successfully")
 
-                                db.runTransaction { transaction ->
-                                    // Read current wallet state
-                                    val walletSnapshot = transaction.get(sellerWalletRef)
-                                    val currentCoins = walletSnapshot.getLong("coins") ?: 0L
-                                    val newCoins = currentCoins + 2
+                                // Step 2: Check if wallet exists, create if needed, then award coins
+                                sellerWalletRef.get()
+                                    .addOnSuccessListener { walletDoc ->
+                                        if (!walletDoc.exists()) {
+                                            Log.d("PickupComplete", "Wallet doesn't exist, creating new wallet")
 
-                                    // Update ONLY the coins field
-                                    transaction.update(sellerWalletRef, "coins", newCoins)
+                                            // Wallet doesn't exist - create it with initial 2 coins
+                                            sellerWalletRef.set(hashMapOf(
+                                                "coins" to 2L,
+                                                "cashBalance" to 0L
+                                            )).addOnSuccessListener {
+                                                Log.d("PickupComplete", "Wallet created successfully")
 
-                                    // Create transaction record
-                                    val transactionRef = sellerWalletRef
-                                        .collection("transactions")
-                                        .document()
+                                                // Create transaction record
+                                                sellerWalletRef
+                                                    .collection("transactions")
+                                                    .add(hashMapOf(
+                                                        "coins" to 2L,
+                                                        "type" to "earned",
+                                                        "description" to "Pickup completed - ${request.companyName}",
+                                                        "timestamp" to com.google.firebase.Timestamp.now()
+                                                    ))
+                                                    .addOnSuccessListener {
+                                                        Log.d("PickupComplete", "Transaction record created")
+                                                        isProcessing = false
+                                                        Toast.makeText(
+                                                            context,
+                                                            "✅ Completed! Seller earned 2 green coins",
+                                                            Toast.LENGTH_LONG
+                                                        ).show()
+                                                    }
+                                                    .addOnFailureListener { e ->
+                                                        Log.e("PickupComplete", "Failed to create transaction", e)
+                                                        isProcessing = false
+                                                        Toast.makeText(
+                                                            context,
+                                                            "Completed but transaction record failed: ${e.message}",
+                                                            Toast.LENGTH_SHORT
+                                                        ).show()
+                                                    }
+                                            }.addOnFailureListener { e ->
+                                                Log.e("PickupComplete", "Failed to create wallet", e)
+                                                isProcessing = false
+                                                Toast.makeText(
+                                                    context,
+                                                    "Error creating wallet: ${e.message}",
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+                                            }
+                                        } else {
+                                            Log.d("PickupComplete", "Wallet exists, updating coins")
 
-                                    transaction.set(transactionRef, hashMapOf(
-                                        "coins" to 2L,
-                                        "type" to "earned",
-                                        "description" to "Pickup completed - ${request.companyName}",
-                                        "timestamp" to com.google.firebase.Timestamp.now()
-                                    ))
+                                            // Wallet exists - use transaction to update it atomically
+                                            db.runTransaction { transaction ->
+                                                val snapshot = transaction.get(sellerWalletRef)
+                                                val currentCoins = snapshot.getLong("coins") ?: 0L
+                                                val newCoins = currentCoins + 2
 
-                                    null // Return value
-                                }.addOnSuccessListener {
-                                    isProcessing = false
-                                    Toast.makeText(
-                                        context,
-                                        "✅ Completed! Seller earned 2 green coins",
-                                        Toast.LENGTH_LONG
-                                    ).show()
-                                }.addOnFailureListener { e ->
-                                    isProcessing = false
-                                    Toast.makeText(
-                                        context,
-                                        "Error awarding coins: ${e.message}",
-                                        Toast.LENGTH_LONG
-                                    ).show()
-                                }
+                                                Log.d("PickupComplete", "Current coins: $currentCoins, New coins: $newCoins")
+
+                                                // Update only the coins field
+                                                transaction.update(sellerWalletRef, "coins", newCoins)
+
+                                                // Create transaction record
+                                                val transactionRef = sellerWalletRef
+                                                    .collection("transactions")
+                                                    .document()
+
+                                                transaction.set(transactionRef, hashMapOf(
+                                                    "coins" to 2L,
+                                                    "type" to "earned",
+                                                    "description" to "Pickup completed - ${request.companyName}",
+                                                    "timestamp" to com.google.firebase.Timestamp.now()
+                                                ))
+
+                                                newCoins // Return value for logging
+                                            }.addOnSuccessListener { newCoins ->
+                                                Log.d("PickupComplete", "Transaction successful. New balance: $newCoins")
+                                                isProcessing = false
+                                                Toast.makeText(
+                                                    context,
+                                                    "✅ Completed! Seller earned 2 green coins",
+                                                    Toast.LENGTH_LONG
+                                                ).show()
+                                            }.addOnFailureListener { e ->
+                                                Log.e("PickupComplete", "Transaction failed", e)
+                                                isProcessing = false
+                                                Toast.makeText(
+                                                    context,
+                                                    "Error awarding coins: ${e.message}",
+                                                    Toast.LENGTH_LONG
+                                                ).show()
+                                            }
+                                        }
+                                    }
+                                    .addOnFailureListener { e ->
+                                        Log.e("PickupComplete", "Failed to check wallet", e)
+                                        isProcessing = false
+                                        Toast.makeText(
+                                            context,
+                                            "Error checking wallet: ${e.message}",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
                             }
                             .addOnFailureListener { e ->
+                                Log.e("PickupComplete", "Failed to update booking", e)
                                 isProcessing = false
                                 Toast.makeText(
                                     context,
